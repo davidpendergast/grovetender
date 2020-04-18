@@ -7,7 +7,7 @@ import pathlib
 The main entry point.
 """
 
-NAME_OF_GAME = "GameName"
+NAME_OF_GAME = "Grovetender"
 
 
 def _get_crash_report_file_name():
@@ -19,7 +19,7 @@ def _get_crash_report_file_name():
 if __name__ == "__main__":
     version_string = "?"
     try:
-        import src.example.gameloop as gameloop
+        import src.game.gameloop as gameloop
         gameloop.init(NAME_OF_GAME)
         gameloop.run()
 
