@@ -96,7 +96,7 @@ def init_towers():
 
     VEG_1 = TowerSpec("Root Vegetable", TowerTypes.VEG, 1, spriteref.MAIN_SHEET.veg_icons[0], {}, 6)
     VEG_2 = TowerSpec("Leafy Vegetable", TowerTypes.VEG, 2, spriteref.MAIN_SHEET.veg_icons[1], {}, 15)
-    VEG_3 = TowerSpec("Vegetable Stalk", TowerTypes.FRUIT, 3, spriteref.MAIN_SHEET.veg_icons[2], {}, 45)
+    VEG_3 = TowerSpec("Vegetable Stalk", TowerTypes.VEG, 3, spriteref.MAIN_SHEET.veg_icons[2], {}, 45)
 
     MUSHROOM_1 = TowerSpec("Tiny Mushroom", TowerTypes.MUSHROOM, 1, spriteref.MAIN_SHEET.mushroom_icons[0], {}, 18)
     MUSHROOM_2 = TowerSpec("Shelf Mushroom", TowerTypes.MUSHROOM, 2, spriteref.MAIN_SHEET.mushroom_icons[1], {}, 36)

@@ -20,6 +20,12 @@ class ResourceType:
     VP = "VP"
 
 
+class GroundType:
+    ROCK = "ROCK"
+    DIRT = "DIRT"
+    INACCESSIBLE = "INACCESSABLE"
+
+
 class GameState:
 
     def __init__(self):
@@ -43,14 +49,40 @@ class GameState:
             ResourceType.VP: 0
         }
 
+        self.world_tiles = {}  # (x, y) -> TileInfo
+        self._populate_initial_world_tiles()
+
     def get_resources(self, res_type):
         return self.resources[res_type]
 
     def is_trying_to_buy(self):
         return self.trying_to_buy is not None
 
+    def should_show_empty_tiles(self):
+        return True
+
     def get_blight_pcnt(self):
         return util.Utils.bound(self.get_resources(ResourceType.BLIGHT) / self.max_blight, 0, 1)
+
+    def get_tile_info(self, xy):
+        if xy in self.world_tiles:
+            return self.world_tiles[xy]
+        else:
+            return None
+
+    def _populate_initial_world_tiles(self):
+        inaccessible = set()
+        inaccessible.update([(0, 0), (1, 0)])
+        dirt = set()
+        for x in range(0, 17):
+            for y in range(0, 8):
+                xy = (x, y)
+                if xy in inaccessible:
+                    self.world_tiles[xy] = TileInfo(GroundType.INACCESSIBLE)
+                elif xy in dirt:
+                    self.world_tiles[xy] = TileInfo(GroundType.DIRT)
+                else:
+                    self.world_tiles[xy] = TileInfo(GroundType.ROCK)
 
     def update(self):
         self.handle_user_inputs()
@@ -62,6 +94,7 @@ class GameState:
 
     def handle_user_inputs(self):
         input_state = inputs.get_instance()
+
         if not input_state.mouse_in_window():
             self.set_hover_element(None)
         else:
@@ -71,8 +104,9 @@ class GameState:
 
     def _get_hover_obj_at(self, game_pos):
         uis_to_check = [self.renderer.ui_main_panel,
-                        self.renderer.ui_blight_bar]
-                        # TODO add world and contracts
+                        self.renderer.ui_blight_bar,
+                        self.renderer.world_scene]
+                        # TODO add contracts
         for ui in uis_to_check:
             obj = ui.get_element_for_hover(game_pos)
             if obj is not None:
@@ -92,12 +126,27 @@ class GameState:
         return self.current_hover_obj
 
 
+class TileInfo:
+
+    def __init__(self, ground_type):
+        self.tower_spec = None
+        self.ground_type = ground_type
+
+    def get_tower_spec(self):
+        return self.tower_spec
+
+    def get_ground_type(self):
+        return self.ground_type
+
+
 class Renderer:
 
     def __init__(self):
-        self.ui_main_panel = MainPanelElement((0, 0))
-        self.ui_blight_bar = BlightBarElement((0, 0))
-        self.ui_hover_info_box = HoverInfoBox((0, 0))
+        self.ui_main_panel = MainPanelElement()
+        self.ui_blight_bar = BlightBarElement()
+        self.ui_hover_info_box = HoverInfoBox()
+
+        self.world_scene = WorldSceneElement()
 
     def all_sprites(self):
         for spr in self.ui_main_panel.all_sprites():
@@ -105,6 +154,8 @@ class Renderer:
         for spr in self.ui_blight_bar.all_sprites():
             yield spr
         for spr in self.ui_hover_info_box.all_sprites():
+            yield spr
+        for spr in self.world_scene.all_sprites():
             yield spr
 
     def update(self, game_state):
@@ -117,6 +168,8 @@ class Renderer:
         self.ui_main_panel.update(game_state)
         self.ui_blight_bar.update(game_state)
         self.ui_hover_info_box.update(game_state)
+
+        self.world_scene.update(game_state)
 
 
 class UiElement:
@@ -198,14 +251,14 @@ class UiElement:
         else:
             return None
 
-    def do_click(self):
+    def do_click(self, game_state):
         pass
 
 
 class MainPanelElement(UiElement):
 
-    def __init__(self, xy, parent=None):
-        UiElement.__init__(self, xy, parent=parent)
+    def __init__(self):
+        UiElement.__init__(self, (0, 0), parent=None)
         self.panel_sprite = None
 
         self.basic_tower_buttons = []
@@ -374,8 +427,8 @@ class TowerBuyButton(TowerIconElement):
 
 class HoverInfoBox(UiElement):
 
-    def __init__(self, xy, parent=None):
-        UiElement.__init__(self, xy, parent=parent)
+    def __init__(self):
+        UiElement.__init__(self, (0, 0), parent=None)
         self.box_bg_sprite = None
         self.text_sprite = None
 
@@ -428,8 +481,8 @@ class HoverInfoBox(UiElement):
 
 class BlightBarElement(UiElement):
 
-    def __init__(self, xy, parent=None):
-        UiElement.__init__(self, xy, parent=parent)
+    def __init__(self):
+        UiElement.__init__(self, (0, 0), parent=None)
         self.bg_sprite = None
 
         self.blight_text = ": 0%"
@@ -474,8 +527,6 @@ class BlightBarElement(UiElement):
 
         blight_pcnt = game_state.get_blight_pcnt()
 
-        blight_pcnt = (gs.get_instance().tick_count // 10) % 100 / 100  # TODO just for fun
-
         self.blight_text = "{}%".format(int(blight_pcnt * 100))
         if self.blight_text_sprite is None:
             self.blight_text_sprite = sprites.TextSprite(spriteref.LAYER_UI_FG, 0, 0, self.blight_text)
@@ -494,6 +545,150 @@ class BlightBarElement(UiElement):
         self.bar_sprite = self.bar_sprite.update(new_model=bar_model, new_ratio=bar_ratio,
                                                  new_x=abs_xy[0] + 2 * bar_start_x,
                                                  new_y=abs_xy[1])
+
+
+class CellInWorldButton(UiElement):
+
+    def __init__(self, xy, xy_in_world, parent=None):
+        UiElement.__init__(self, xy, parent=parent)
+        self.xy_in_world = xy_in_world
+
+        self.icon_sprite = None
+        self.icon_outline_sprite = None
+
+    def get_size(self):
+        return 16, 16
+
+    def can_be_hovered(self):
+        return True
+
+    def can_be_clicked(self):
+        return True
+
+    def do_click(self, game_state):
+        pass
+
+    def set_xy_in_world(self, xy):
+        self.xy_in_world = xy
+
+    def all_sprites(self):
+        if self.icon_sprite is not None:
+            yield self.icon_sprite
+        if self.icon_outline_sprite is not None:
+            yield self.icon_outline_sprite
+
+    def update(self, game_state):
+        tileinfo = game_state.get_tile_info(self.xy_in_world)
+        icon_model = None
+        outline_color = None
+
+        if tileinfo is None:
+            pass  # just destroy it
+        else:
+            tower_spec = tileinfo.get_tower_spec()
+            ground_type = tileinfo.get_ground_type()
+
+            if tower_spec is not None:
+                icon_model = tower_spec.get_icon()
+                if ground_type == GroundType.DIRT:
+                    outline_color = colors.DIRT_COLOR
+                else:
+                    outline_color = colors.WHITE
+            else:
+                if ground_type == GroundType.ROCK:
+                    if game_state.should_show_empty_tiles():
+                        icon_model = spriteref.MAIN_SHEET.tile_empty
+                    else:
+                        pass  # just destroy
+                elif ground_type == GroundType.DIRT:
+                    icon_model = spriteref.MAIN_SHEET.tile_dirt
+
+        xy_abs = self.get_xy(local=False)
+
+        if icon_model is not None:
+            if self.icon_sprite is None:
+                self.icon_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_SCENE_FG, scale=2, depth=10)
+            self.icon_sprite = self.icon_sprite.update(new_model=icon_model, new_x=xy_abs[0], new_y=xy_abs[1])
+        else:
+            if self.icon_sprite is not None:
+                renderengine.get_instance().remove(self.icon_sprite)
+                self.icon_sprite = None
+
+        if outline_color is not None:
+            if self.icon_outline_sprite is None:
+                self.icon_outline_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_SCENE_FG, scale=2, depth=5)
+            self.icon_outline_sprite = self.icon_outline_sprite.update(new_model=spriteref.MAIN_SHEET.icon_outline,
+                                                                       new_x=xy_abs[0], new_y=xy_abs[1],
+                                                                       new_color=outline_color)
+        else:
+            if self.icon_outline_sprite is not None:
+                renderengine.get_instance().remove(self.icon_outline_sprite)
+                self.icon_outline_sprite = None
+
+
+class WorldSceneElement(UiElement):
+
+    def __init__(self):
+        UiElement.__init__(self, (0, 0), parent=None)
+
+        self.big_rock_sprite = None
+        self.cells = {}  # (x, y) -> CellInWorldButton
+
+    def all_sprites(self):
+        if self.big_rock_sprite is not None:
+            yield self.big_rock_sprite
+
+        for key in self.cells:
+            butt = self.cells[key]
+            for spr in butt.all_sprites():
+                yield spr
+
+    def all_children(self):
+        for key in self.cells:
+            yield self.cells[key]
+
+    def update(self, game_state):
+        if self.big_rock_sprite is None:
+            self.big_rock_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_SCENE_ENVIRONMENT, scale=2)
+
+        game_size = renderengine.get_instance().get_game_size()
+        self.set_xy((0, game_size[1] - 204 * 2), local=False)
+
+        abs_xy = self.get_xy(local=False)
+        rock_model = spriteref.MAIN_SHEET.giant_rock
+
+        self.big_rock_sprite = self.big_rock_sprite.update(new_model=rock_model,
+                                                           new_x=abs_xy[0], new_y=abs_xy[1])
+
+        no_longer_exist = set()  # shouldn't be needed
+        for xy in self.cells:
+            no_longer_exist.add(xy)
+
+        for xy in game_state.world_tiles:
+            tileinfo = game_state.get_tile_info(xy)
+            if tileinfo is not None and xy not in self.cells:
+                self.cells[xy] = CellInWorldButton((0, 0), xy, parent=self)
+            if xy in no_longer_exist:
+                no_longer_exist.remove(xy)
+
+        for xy in no_longer_exist:  # again, there's no reason why a cell would disappear from the game state
+            button = self.cells[xy]
+            for spr in button.all_sprites():
+                renderengine.get_instance().remove(spr)
+            del self.cells[xy]
+
+        for xy in self.cells:
+            button = self.cells[xy]
+            render_xy = (16 * 2 * (xy[0] + 1),
+                         16 * 2 * (xy[1] + 1))
+            button.set_xy(render_xy, local=True)
+            button.set_xy_in_world(xy)
+            button.update(game_state)
+
+
+
+
+
 
 
 
