@@ -14,6 +14,7 @@ import src.engine.spritesheets as spritesheets
 
 import src.game.spriteref as spriteref
 import src.game.globalstate as gs
+import src.game.gamestate as gamestate
 
 DEFAULT_SCREEN_SIZE = (800, 600)
 MINIMUM_SCREEN_SIZE = (800, 600)
@@ -39,7 +40,8 @@ def init(name_of_game):
     render_eng.set_min_size(*MINIMUM_SCREEN_SIZE)
 
     sprite_atlas = spritesheets.create_instance()
-    sprite_atlas.add_sheet(spriteref.MainSheet())
+
+    spriteref.MAIN_SHEET = sprite_atlas.add_sheet(spriteref.MainSheet())
 
     atlas_surface = sprite_atlas.create_atlas_surface()
 
@@ -63,6 +65,8 @@ def init(name_of_game):
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_UI_TOOLTIP, 20, SORTS, COLOR))
 
     gs.create_instance()
+
+    gs.get_instance().set_game_state(gamestate.GameState())
 
     inputs.create_instance()
 
@@ -195,7 +199,6 @@ def run():
 
         renderengine.get_instance().set_clear_color((0, 0, 0))
 
-        # REPLACE with real updating
         gs.get_instance().update_all()
 
         renderengine.get_instance().render_layers()

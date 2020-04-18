@@ -103,3 +103,6 @@ class MainSheet(spritesheets.SpriteSheet):
         self.contract_panel_veg = self.contract_panels[1]
         self.contract_panel_mushroom = self.contract_panels[2]
         self.contract_panel_flower = self.contract_panels[3]
+
+
+MAIN_SHEET = MainSheet()

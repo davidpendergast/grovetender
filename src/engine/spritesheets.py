@@ -133,6 +133,7 @@ class SpriteAtlas:
 
     def add_sheet(self, sheet):
         self._sheets[sheet.get_sheet_id()] = sheet
+        return sheet
 
     def get_sheet(self, sheet_id):
         if sheet_id in self._sheets:

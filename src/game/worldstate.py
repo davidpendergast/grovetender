@@ -6,6 +6,9 @@ class WorldState:
     def __init__(self):
         self. tile_grid = {}  # (x, y) -> TileInfo
 
+    def update(self, game_state):
+        pass
+
 
 class TileInfo:
 
