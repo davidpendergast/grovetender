@@ -320,7 +320,7 @@ class TowerIconElement(UiElement):
         if self.tower_spec is None:
             return None
         else:
-            return self.tower_spec.name
+            return sprites.TextBuilder().add(self.tower_spec.name, color=self.tower_spec.get_color())
 
     def can_be_clicked(self):
         return True
@@ -403,6 +403,9 @@ class HoverInfoBox(UiElement):
                 renderengine.get_instance().remove(self.box_bg_sprite)
                 self.box_bg_sprite = None
         else:
+            if isinstance(hover_text, str):
+                hover_text = sprites.TextBuilder().add(hover_text)
+
             # it always goes on top of this bar
             # so why not make it a child of the bar? we could
             blight_bar_model = ui_blight_bar_model = spriteref.MAIN_SHEET.ui_blight_bar_bg
@@ -419,7 +422,8 @@ class HoverInfoBox(UiElement):
 
             if self.text_sprite is None:
                 self.text_sprite = sprites.TextSprite(spriteref.LAYER_UI_FG, 0, 0, "abc", scale=1)
-            self.text_sprite = self.text_sprite.update(new_x=inner_rect[0], new_y=inner_rect[1], new_text=hover_text)
+            self.text_sprite = self.text_sprite.update(new_x=inner_rect[0], new_y=inner_rect[1],
+                                                       new_text=hover_text.text, new_color_lookup=hover_text.colors)
 
 
 class BlightBarElement(UiElement):
@@ -443,10 +447,10 @@ class BlightBarElement(UiElement):
         return True
 
     def get_hover_text(self, game_state):
-        return "Blight at {}/{}\nWhen it fills completely, the garden dies and you lose.".format(
-            game_state.get_resources(ResourceType.BLIGHT),
-            game_state.max_blight,
-            int(game_state.get_blight_pcnt() * 100))
+        first_line = "Blight at {}/{}".format(game_state.get_resources(ResourceType.BLIGHT), game_state.max_blight)
+        return sprites.TextBuilder()\
+                .addLine(first_line, color=colors.BLIGHT_COLOR)\
+                .addLine("When it fills completely, the garden dies and you lose.")
 
     def all_sprites(self):
         if self.bg_sprite is not None:
