@@ -53,7 +53,6 @@ def init(name_of_game):
     height = atlas_surface.get_height()
     render_eng.set_texture(texture_data, width, height)
 
-    # REPLACE with whatever layers you need
     COLOR = True
     SORTS = True
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_SCENE_BG, 0, False, COLOR))
@@ -63,6 +62,9 @@ def init(name_of_game):
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_UI_BG, 12, SORTS, COLOR))
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_UI_FG, 15, SORTS, COLOR))
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_UI_TOOLTIP, 20, SORTS, COLOR))
+
+    import src.game.towers as towers  # bleh
+    towers.init_towers()
 
     gs.create_instance()
 
