@@ -71,8 +71,13 @@ class GameState:
             return None
 
     def _populate_initial_world_tiles(self):
-        inaccessible = set()
-        inaccessible.update([(0, 0), (1, 0)])
+        inaccessible = [(0, i) for i in range(4, 8)]        # the rock is kinda irregular
+        inaccessible.extend([(i, 7) for i in range(1, 9)])
+        inaccessible.extend([(0, 0), (1, 0)])
+        inaccessible.extend([(4 + i, i) for i in range(0, 4)])
+        inaccessible.extend([(14, 7), (15, 7), (16, 7)])
+        inaccessible.extend([(10, 2), (11, 3), (12, 3), (13, 3)])
+        inaccessible.extend([(9, 0), (9, 1)]) 
         dirt = set()
         for x in range(0, 17):
             for y in range(0, 8):
@@ -102,6 +107,11 @@ class GameState:
             hover_obj = self._get_hover_obj_at(mouse_pos)
             self.set_hover_element(hover_obj)
 
+            if input_state.mouse_was_pressed():
+                clicked_obj = self._get_clicked_obj_at(mouse_pos)
+                if clicked_obj is not None:
+                    clicked_obj.do_click(self)
+
     def _get_hover_obj_at(self, game_pos):
         uis_to_check = [self.renderer.ui_main_panel,
                         self.renderer.ui_blight_bar,
@@ -109,6 +119,17 @@ class GameState:
                         # TODO add contracts
         for ui in uis_to_check:
             obj = ui.get_element_for_hover(game_pos)
+            if obj is not None:
+                return obj
+        return None
+
+    def _get_clicked_obj_at(self, game_pos):
+        uis_to_check = [self.renderer.ui_main_panel,
+                        self.renderer.ui_blight_bar,
+                        self.renderer.world_scene]
+        # TODO add contracts
+        for ui in uis_to_check:
+            obj = ui.get_element_for_click(game_pos)
             if obj is not None:
                 return obj
         return None
@@ -252,7 +273,7 @@ class UiElement:
             return None
 
     def do_click(self, game_state):
-        pass
+        print("clicked ui element: {}".format(type(self).__name__))
 
 
 class MainPanelElement(UiElement):
@@ -557,7 +578,10 @@ class CellInWorldButton(UiElement):
         self.icon_outline_sprite = None
 
     def get_size(self):
-        return 16, 16
+        if self.icon_sprite is not None:
+            return self.icon_sprite.size()
+        else:
+            return super().get_size()
 
     def can_be_hovered(self):
         return True
@@ -566,7 +590,7 @@ class CellInWorldButton(UiElement):
         return True
 
     def do_click(self, game_state):
-        pass
+        print("clicked world button at: {}".format(self.xy_in_world))
 
     def set_xy_in_world(self, xy):
         self.xy_in_world = xy
