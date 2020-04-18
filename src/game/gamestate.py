@@ -1,6 +1,7 @@
 import src.engine.renderengine as renderengine
 import src.engine.sprites as sprites
 import src.utils.util as util
+import src.engine.inputs as inputs
 
 import src.game.worldstate as worldstate
 import src.game.spriteref as spriteref
@@ -28,6 +29,7 @@ class GameState:
         self.utility_towers_in_shop = towers.all_utility_towers()
 
         self.trying_to_buy = None  # spec that the user has clicked
+        self.current_hover_obj = None  # the thing you're hovering over
 
         self.max_blight = 100  # you lose when you hit this
 
@@ -51,7 +53,43 @@ class GameState:
         return util.Utils.bound(self.get_resources(ResourceType.BLIGHT) / self.max_blight, 0, 1)
 
     def update(self):
+        self.handle_user_inputs()
+
         self.renderer.update(self)
+
+    def set_hover_element(self, obj):
+        self.current_hover_obj = obj
+
+    def handle_user_inputs(self):
+        input_state = inputs.get_instance()
+        if not input_state.mouse_in_window():
+            self.set_hover_element(None)
+        else:
+            mouse_pos = input_state.mouse_pos()
+            hover_obj = self._get_hover_obj_at(mouse_pos)
+            self.set_hover_element(hover_obj)
+
+    def _get_hover_obj_at(self, game_pos):
+        uis_to_check = [self.renderer.ui_main_panel,
+                        self.renderer.ui_blight_bar]
+                        # TODO add world and contracts
+        for ui in uis_to_check:
+            obj = ui.get_element_for_hover(game_pos)
+            if obj is not None:
+                return obj
+        return None
+
+    def handle_mouse_press(self, button, pos):
+        pass
+
+    def get_current_hover_text(self):
+        if self.current_hover_obj is None:
+            return None
+        else:
+            return self.current_hover_obj.get_hover_text(self)
+
+    def get_current_hover_obj(self):
+        return self.current_hover_obj
 
 
 class Renderer:
@@ -59,11 +97,14 @@ class Renderer:
     def __init__(self):
         self.ui_main_panel = MainPanelElement((0, 0))
         self.ui_blight_bar = BlightBarElement((0, 0))
+        self.ui_hover_info_box = HoverInfoBox((0, 0))
 
     def all_sprites(self):
         for spr in self.ui_main_panel.all_sprites():
             yield spr
         for spr in self.ui_blight_bar.all_sprites():
+            yield spr
+        for spr in self.ui_hover_info_box.all_sprites():
             yield spr
 
     def update(self, game_state):
@@ -75,6 +116,7 @@ class Renderer:
     def _update_ui(self, game_state):
         self.ui_main_panel.update(game_state)
         self.ui_blight_bar.update(game_state)
+        self.ui_hover_info_box.update(game_state)
 
 
 class UiElement:
@@ -114,6 +156,9 @@ class UiElement:
         size = self.get_size()
         return [xy[0], xy[1], size[0], size[1]]
 
+    def get_rect_for_hover_test(self):
+        return self.get_rect(local=False)
+
     def all_sprites(self):
         yield
 
@@ -125,9 +170,9 @@ class UiElement:
 
     def get_element_for_hover(self, pos):
         for child in self.all_children():
-            if child.can_be_hovered() and util.Utils.rect_contains(child.get_rect(local=False), pos):
+            if child.can_be_hovered() and util.Utils.rect_contains(child.get_rect_for_hover_test(), pos):
                 return child
-        if self.can_be_hovered() and util.Utils.rect_contains(self.get_rect(local=False), pos):
+        if self.can_be_hovered() and util.Utils.rect_contains(self.get_rect_for_hover_test(), pos):
             return self
         else:
             return None
@@ -138,7 +183,7 @@ class UiElement:
     def is_hovered(self):
         return gs.get_instance().tick_count - self._hover_tick <= 1
 
-    def get_hover_text(self):
+    def get_hover_text(self, game_state):
         return None
 
     def can_be_clicked(self):
@@ -256,7 +301,7 @@ class TowerIconElement(UiElement):
         else:
             return self.icon_sprite.size()
 
-    def get_outline_color(self):
+    def get_outline_color(self, game_state):
         return colors.WHITE
 
     def get_icon_model(self):
@@ -267,6 +312,18 @@ class TowerIconElement(UiElement):
 
     def get_outline_model(self):
         return spriteref.MAIN_SHEET.icon_outline
+
+    def can_be_hovered(self):
+        return True
+
+    def get_hover_text(self, game_state):
+        if self.tower_spec is None:
+            return None
+        else:
+            return self.tower_spec.name
+
+    def can_be_clicked(self):
+        return True
 
     def all_sprites(self):
         if self.icon_sprite is not None:
@@ -282,9 +339,9 @@ class TowerIconElement(UiElement):
         self.icon_sprite = self.icon_sprite.update(new_model=icon_model, new_x=abs_xy[0], new_y=abs_xy[1])
 
         outline_model = self.get_outline_model()
-        outline_color = self.get_outline_color()
+        outline_color = self.get_outline_color(game_state)
         if self.icon_outline_sprite is None:
-            self.icon_outline_sprite = sprites.ImageSprite.new_sprite(self.layer_id, scale=2, depth=15)  # on top
+            self.icon_outline_sprite = sprites.ImageSprite.new_sprite(self.layer_id, scale=2, depth=5)  # on top
         self.icon_outline_sprite = self.icon_outline_sprite.update(new_model=outline_model,
                                                                    new_x=abs_xy[0], new_y=abs_xy[1],
                                                                    new_color=outline_color)
@@ -295,21 +352,74 @@ class TowerBuyButton(TowerIconElement):
     def __init__(self, tower_spec, xy, layer_id, parent=None):
         TowerIconElement.__init__(self, tower_spec, xy, layer_id, parent=parent)
 
-    def get_outline_color(self):
-        if self.is_hovered():
+    def get_outline_color(self, game_state):
+        if game_state.get_current_hover_obj() == self:
             return colors.RED
         else:
-            return super().get_outline_color()
+            return super().get_outline_color(game_state)
+
+    def get_rect_for_hover_test(self):
+        base_rect = self.get_rect(local=False)
+        if base_rect[2] > 0 and base_rect[3] > 0:
+            return util.Utils.rect_expand(base_rect, left_expand=2, right_expand=2, up_expand=2, down_expand=2)
+        else:
+            return super().get_rect_for_hover_test()
 
     def can_be_hovered(self):
         return True
 
-    def get_hover_text(self):
-        # TODO - implement TextBuilder
-        pass
-
     def can_be_clicked(self):
         return True
+
+
+class HoverInfoBox(UiElement):
+
+    def __init__(self, xy, parent=None):
+        UiElement.__init__(self, xy, parent=parent)
+        self.box_bg_sprite = None
+        self.text_sprite = None
+
+    def get_size(self):
+        if self.box_bg_sprite is None:
+            return super().get_size()
+        else:
+            return self.box_bg_sprite.size()
+
+    def all_sprites(self):
+        if self.box_bg_sprite is not None:
+            for spr in self.box_bg_sprite.all_sprites():
+                yield spr
+        if self.text_sprite is not None:
+            for spr in self.text_sprite.all_sprites():
+                yield spr
+
+    def update(self, game_state):
+        hover_text = game_state.get_current_hover_text()
+        if hover_text is None:
+            if self.text_sprite is not None:
+                renderengine.get_instance().remove(self.text_sprite)
+                self.text_sprite = None
+            if self.box_bg_sprite is not None:
+                renderengine.get_instance().remove(self.box_bg_sprite)
+                self.box_bg_sprite = None
+        else:
+            # it always goes on top of this bar
+            # so why not make it a child of the bar? we could
+            blight_bar_model = ui_blight_bar_model = spriteref.MAIN_SHEET.ui_blight_bar_bg
+            game_size = renderengine.get_instance().get_game_size()
+            border = 4  # sheet dims
+            box_height = 36
+            inner_rect = [border * 2,
+                          game_size[1] - ui_blight_bar_model.height() * 2 - box_height * 2 - border * 2,
+                          ui_blight_bar_model.width() * 2 - border * 4,
+                          box_height * 2]
+            if self.box_bg_sprite is None:
+                self.box_bg_sprite = sprites.BorderBoxSprite(spriteref.LAYER_UI_BG, inner_rect, scale=2, all_borders=spriteref.MAIN_SHEET.box_borders)
+            self.box_bg_sprite = self.box_bg_sprite.update(new_rect=inner_rect)
+
+            if self.text_sprite is None:
+                self.text_sprite = sprites.TextSprite(spriteref.LAYER_UI_FG, 0, 0, "abc", scale=1)
+            self.text_sprite = self.text_sprite.update(new_x=inner_rect[0], new_y=inner_rect[1], new_text=hover_text)
 
 
 class BlightBarElement(UiElement):
@@ -328,6 +438,15 @@ class BlightBarElement(UiElement):
             return super().get_size()
         else:
             return self.bg_sprite.size()
+
+    def can_be_hovered(self):
+        return True
+
+    def get_hover_text(self, game_state):
+        return "Blight at {}/{}\nWhen it fills completely, the garden dies and you lose.".format(
+            game_state.get_resources(ResourceType.BLIGHT),
+            game_state.max_blight,
+            int(game_state.get_blight_pcnt() * 100))
 
     def all_sprites(self):
         if self.bg_sprite is not None:

@@ -59,6 +59,8 @@ class MainSheet(spritesheets.SpriteSheet):
         self.contract_panel_mushroom = None
         self.contract_panel_flower = None
 
+        self.box_borders = []
+
     def draw_to_atlas(self, atlas, sheet, start_pos=(0, 0)):
         super().draw_to_atlas(atlas, sheet, start_pos=start_pos)
 
@@ -103,6 +105,8 @@ class MainSheet(spritesheets.SpriteSheet):
         self.contract_panel_veg = self.contract_panels[1]
         self.contract_panel_mushroom = self.contract_panels[2]
         self.contract_panel_flower = self.contract_panels[3]
+
+        self.box_borders = [sprites.ImageModel(120 + (i % 3) * 8, 248 + (i // 3) * 8, 8, 8, offset=start_pos) for i in range(0, 9)]
 
 
 MAIN_SHEET = MainSheet()
