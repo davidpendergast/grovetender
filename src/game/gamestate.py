@@ -12,8 +12,9 @@ class GameState:
 
     def __init__(self):
         self.world_state = worldstate.WorldState()
-
         self.renderer = Renderer()
+
+        self.towers_in_shop = []
 
         self.max_blight = 100
 
@@ -204,7 +205,7 @@ class BlightBarElement(UiElement):
 
         blight_pcnt = game_state.get_blight_pcnt()
 
-        blight_pcnt = (gs.get_instance().tick_count // 10) % 100 / 100
+        blight_pcnt = (gs.get_instance().tick_count // 10) % 100 / 100  # TODO just for fun
 
         self.blight_text = "{}%".format(int(blight_pcnt * 100))
         if self.blight_text_sprite is None:
