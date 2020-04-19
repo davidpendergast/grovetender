@@ -199,6 +199,11 @@ def run():
             new_pixel_scale = _calc_pixel_scale(display_size, px_scale_opt=new_scale)
             renderengine.get_instance().set_pixel_scale(new_pixel_scale)
 
+        if input_state.was_pressed(pygame.K_r):
+            print("INFO: restarting game")
+            renderengine.get_instance().clear_all_sprites()  # full nuke
+            gs.get_instance().set_game_state(gamestate.GameState())
+
         renderengine.get_instance().set_clear_color((0, 0, 0))
 
         gs.get_instance().update_all()

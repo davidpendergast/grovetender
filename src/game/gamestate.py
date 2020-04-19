@@ -954,7 +954,10 @@ class NextDayButton(UiElement):
             res.addLine("How long can you... Keep it Alive?", color=colors.WHITE)
             return res
         else:
-            pass
+            res = sprites.TextBuilder()
+            res.addLine("Game Over! Thanks for playing!")
+            res.addLine("\nPress R to restart.", color=colors.GRAY)
+            return res
 
     def can_be_clicked(self):
         return True
@@ -964,10 +967,13 @@ class NextDayButton(UiElement):
             game_state.ask_for_next_day()
 
     def get_outline_color(self, game_state):
-        if game_state.get_current_hover_obj() == self:
-            return colors.RED
+        if game_state.is_game_over():
+            return colors.GRAY
         else:
-            return colors.WHITE
+            if game_state.get_current_hover_obj() == self:
+                return colors.RED
+            else:
+                return colors.WHITE
 
     def all_sprites(self):
         if self.button_sprite is not None:
