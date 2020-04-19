@@ -62,15 +62,21 @@ class TowerStatType:
 
     def get_desc(self, number):
         if number < 0 and self.neg_desc is not None:
-            if "{}" in self.neg_desc:
-                return self.neg_desc.format(number)
-            else:
+            count = self.neg_desc.count("{}")
+            if count == 0:
                 return self.neg_desc
+            elif count == 1:
+                return self.neg_desc.format(number)
+            elif count == 2:
+                return self.neg_desc.format(number, number)
         else:
-            if "{}" in self.desc:
-                return self.desc.format(number)
-            else:
+            count = self.desc.count("{}")
+            if count == 0:
                 return self.desc
+            elif count == 1:
+                return self.desc.format(number)
+            elif count == 2:
+                return self.desc.format(number, number)
 
 
 class TowerStatTypes:
@@ -78,23 +84,24 @@ class TowerStatTypes:
     CYCLE_LENGTH = TowerStatType("CYCLE_LENGTH", "Activates every {} days.")
 
     FRUIT_PRODUCTION = TowerStatType("FRUIT_PROD", "Produces {} fruit per activation.", is_prod=True, color=colors.FRUIT_COLOR)
-    VEG_PRODUCTION = TowerStatType("VEG_PROD", "Produces {} vegetables per activation.", is_prod=True, color=colors.VEG_COLOR)
-    MUSHROOM_PRODUCTION = TowerStatType("MUSHROOM_PROD", "Produces {} mushrooms per activation.", is_prod=True, color=colors.MUSHROOM_COLOR)
-    FLOWER_PRODUCTION = TowerStatType("FLOWER_PROD", "Produces {} Flowers per activation.", is_prod=True, color=colors.FLOWER_COLOR)
+    VEG_PRODUCTION = TowerStatType("VEG_PROD", "Produces {} vegetable(s) per activation.", is_prod=True, color=colors.VEG_COLOR)
+    MUSHROOM_PRODUCTION = TowerStatType("MUSHROOM_PROD", "Produces {} mushroom(s) per activation.", is_prod=True, color=colors.MUSHROOM_COLOR)
+    FLOWER_PRODUCTION = TowerStatType("FLOWER_PROD", "Produces {} flower(s) per activation.", is_prod=True, color=colors.FLOWER_COLOR)
     MONEY_PRODUCTION = TowerStatType("MONEY_PROD", "Gives ${} per activation")  # doesn't count as production
 
-    MUSHROOM_HARVEST = TowerStatType("MUSHROOM_HARVEST", "Gives {} mushrooms when sold.")
+    MUSHROOM_HARVEST = TowerStatType("MUSHROOM_HARVEST", "Gives {} mushroom(s) when sold.")
 
     BLIGHT_PRODUCTION = TowerStatType("BLIGHT_PROD", "Produces {} blight per activation.", is_prod=True, color=colors.BLIGHT_COLOR)
 
     UPGRADING = TowerStatType("UPGRADING", "Has a {}% chance to upgrade per activation.")
     SPREADING = TowerStatType("SPREADING", "Has a {}% chance to spread per activation.")
     GROWING = TowerStatType("GROWTH", "Gives +{} production to all adjacent tiles.")
+    SLOWING = TowerStatType("SLOWING", "Gives +{} day(s) per activation to all adjacent tiles.")
     WITHERING = TowerStatType("WITHER", "Gives -{} production to all adjacent tiles.")
 
     DIG = TowerStatType("DIG", "Converts rock to dirt.")
     STORAGE = TowerStatType("STORAGE", "Increases storage of all resources by {}.")
-    PURIFYING = TowerStatType("PURIFYING", "Removes up to {} blight from adjacent tiles.")
+    PURIFYING = TowerStatType("PURIFYING", "Removes blight from up to {} adjacent tile(s).")
 
     NON_ACTIVATING = TowerStatType("NO_ACTIVATE", "Does not activate.")
     SELF_DESTRUCT = TowerStatType("SELF_DESTRUCT", "Removed after activating.")
@@ -155,7 +162,7 @@ class TowerSpec:
             if stat_type.is_hidden():
                 continue
             stat_val = self.stat_value(stat_type)
-            if stat_type.is_production() and stat_val > 0:
+            if stat_val > 0:
                 if game_state is not None and xy is not None:
                     stat_val += game_state.additional_stat_value_at(stat_type, xy)
             if stat_val <= 0:
@@ -298,6 +305,7 @@ def init_towers():
     GROWING_ROCK = TowerSpec("Growing Rock", TowerTypes.ROCK, 1, spriteref.MAIN_SHEET.growing_rock_icon,
                              {
                                  TowerStatTypes.GROWING: 1,
+                                 TowerStatTypes.SLOWING: 1,
                                  TowerStatTypes.NON_ACTIVATING: 1
                              }, 30)
     PURIFICATION_TABLET = TowerSpec("Purification Tablet", TowerTypes.PURIFIER, 1, spriteref.MAIN_SHEET.tombstone_icon,

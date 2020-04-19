@@ -132,6 +132,9 @@ class GameState:
             res = self.sum_of_stat_values_from_towers(towers.TowerStatTypes.GROWING, adjacents)
             res -= self.sum_of_stat_values_from_towers(towers.TowerStatTypes.WITHERING, adjacents)
             return res
+        elif stat_type == towers.TowerStatTypes.CYCLE_LENGTH:
+            adjacents = [n for n in util.Utils.neighbors(xy[0], xy[1], and_diags=True)]
+            return self.sum_of_stat_values_from_towers(towers.TowerStatTypes.SLOWING, adjacents)
         else:
             return 0
 
