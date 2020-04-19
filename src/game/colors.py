@@ -2,6 +2,7 @@
 BLACK = (0, 0, 0)
 WHITE = (1, 1, 1)
 RED = (1, 0, 0)
+GRAY = (0.5, 0.5, 0.5)
 OFF_WHITE = (0.953, 0.953, 0.953)
 
 FRUIT_COLOR = (243 / 255, 125 / 255, 147 / 255)
@@ -12,7 +13,6 @@ BLIGHT_COLOR = (228 / 255, 127 / 255, 253 / 255)
 
 DIRT_COLOR = (131 / 255, 108 / 255, 67 / 255)
 DIRT_LIGHT_COLOR = (174 / 255, 153 / 255, 115 / 255)
-
 
 def darker(color, pcnt=0.3):
     res = []

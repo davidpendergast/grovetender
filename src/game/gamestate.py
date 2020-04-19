@@ -75,9 +75,11 @@ class GameState:
             ResourceTypes.MUSHROOM: 0,
             ResourceTypes.FLOWER: 0,
             ResourceTypes.BLIGHT: 0,
-            ResourceTypes.MONEY: 3000,
+            ResourceTypes.MONEY: 30,
             ResourceTypes.VP: 0
         }
+
+        self._requested_next_day = False
 
         self.day = 1
 
@@ -102,6 +104,10 @@ class GameState:
     def all_tower_specs(self, cond=None):
         for xy in self.all_tower_cells(cond=cond):
             yield self.world_tiles[xy].get_tower_spec()
+
+    def ask_for_next_day(self):
+        print("INFO: requested next day")
+        self._requested_next_day = True
 
     def get_tower_spec_at_position_if_present(self, xy):
         if xy in self.world_tiles:
@@ -385,6 +391,10 @@ class GameState:
         self._handle_floating_texts()
         self._handle_user_inputs()
 
+        if self._requested_next_day:
+            self.do_next_day_seq()
+            self._requested_next_day = False
+
         self.renderer.update(self)
 
     def set_hover_element(self, obj):
@@ -410,7 +420,7 @@ class GameState:
             print("INFO: set always show grid to: {}".format(self._always_show_grid))
 
         if input_state.was_pressed(pygame.K_RETURN):
-            self.do_next_day_seq()
+            self.ask_for_next_day()
 
         if not input_state.mouse_in_window():
             self.set_hover_element(None)
@@ -614,6 +624,8 @@ class MainPanelElement(UiElement):
         self.basic_tower_buttons = []
         self.utility_tower_buttons = []
 
+        self.next_day_button = None
+
     def can_be_clicked(self):
         return True
 
@@ -631,6 +643,9 @@ class MainPanelElement(UiElement):
             if butt is not None:
                 for spr in butt.all_sprites():
                     yield spr
+        if self.next_day_button is not None:
+            for spr in self.next_day_button.all_sprites():
+                yield spr
 
     def all_children(self):
         for butt in self.basic_tower_buttons:
@@ -640,6 +655,9 @@ class MainPanelElement(UiElement):
         for butt in self.utility_tower_buttons:
             if butt is not None:
                 yield butt
+
+        if self.next_day_button is not None:
+            yield self.next_day_button
 
     def update(self, game_state):
         game_size = renderengine.get_instance().get_game_size()
@@ -684,8 +702,77 @@ class MainPanelElement(UiElement):
             y = xy_start[1] + (i * button_spacing[1])
             self.utility_tower_buttons[i].set_xy((xy_start[0] * 2, y * 2))
 
+        next_day_xy = (22, 251)  # sheet dims
+        if self.next_day_button is None:
+            self.next_day_button = NextDayButton(next_day_xy[0] * 2, next_day_xy[1] * 2, parent=self)
+        self.next_day_button.set_xy((next_day_xy[0] * 2, next_day_xy[1] * 2))
+
         for child in self.all_children():
             child.update(game_state)
+
+
+class NextDayButton(UiElement):
+
+    def __init__(self, x, y, parent=None):
+        UiElement.__init__(self, (x, y), parent=parent)
+        self.button_sprite = None
+        self.outline_sprite = None
+
+    def get_size(self):
+        if self.button_sprite is not None:
+            return self.button_sprite.size()
+        else:
+            return super().get_size()
+
+    def can_be_hovered(self):
+        return True
+
+    def get_hover_text(self, game_state):
+        res = sprites.TextBuilder()
+        res.addLine("Advances to the next day.")
+
+        gray = colors.darker(colors.WHITE, pcnt=0.3)
+        #            ##############################################################
+        res.addLine("Buy towers at the top right. Use them to gather resources and", color=gray)
+        res.addLine("complete the goal cards along the top. When you miss a goal,", color=gray)
+        res.addLine("blight will spread and kill your crops.", color=gray)
+        res.addLine("How long can you... Keep it Alive?", color=colors.WHITE)
+        return res
+
+    def can_be_clicked(self):
+        return True
+
+    def do_click(self, button, game_state):
+        if button == 1:
+            game_state.ask_for_next_day()
+
+    def get_outline_color(self, game_state):
+        if game_state.get_current_hover_obj() == self:
+            return colors.RED
+        else:
+            return colors.WHITE
+
+    def all_sprites(self):
+        if self.button_sprite is not None:
+            yield self.button_sprite
+        if self.outline_sprite is not None:
+            yield self.outline_sprite
+
+    def update(self, game_state):
+        button_model = spriteref.MAIN_SHEET.next_day_button
+        outline_model = spriteref.MAIN_SHEET.next_day_outline
+
+        if self.button_sprite is None:
+            self.button_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_FG, scale=2, depth=5)
+        abs_xy = self.get_xy(local=False)
+        self.button_sprite = self.button_sprite.update(new_model=button_model, new_x=abs_xy[0], new_y=abs_xy[1])
+
+        outline_color = self.get_outline_color(game_state)
+        if self.outline_sprite is None:
+            self.outline_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_FG, scale=2, depth=0)  # on top
+        self.outline_sprite = self.outline_sprite.update(new_model=outline_model,
+                                                         new_x=abs_xy[0], new_y=abs_xy[1],
+                                                         new_color=outline_color)
 
 
 class TowerIconElement(UiElement):  # this can really be merged w/ TowerBuyButton
@@ -756,12 +843,15 @@ class TowerBuyButton(TowerIconElement):
         TowerIconElement.__init__(self, tower_spec, xy, layer_id, parent=parent)
 
     def get_outline_color(self, game_state):
-        if game_state.trying_to_buy is None and game_state.get_current_hover_obj() == self:
+        total_cash = game_state.get_resources(ResourceTypes.MONEY)
+        if self.tower_spec is None or self.tower_spec.cost > total_cash:
+            return colors.GRAY
+        elif game_state.trying_to_buy is None and game_state.get_current_hover_obj() == self:
             return colors.RED
         elif game_state.trying_to_buy is not None and game_state.trying_to_buy == self.tower_spec:
             return colors.RED
         else:
-            return super().get_outline_color(game_state)
+            return colors.WHITE
 
     def get_rect_for_hover_test(self):
         base_rect = self.get_rect(local=False)
@@ -781,7 +871,11 @@ class TowerBuyButton(TowerIconElement):
             if game_state.trying_to_buy is not None and game_state.trying_to_buy == self.tower_spec:
                 game_state.set_trying_to_buy(None)  # toggle it back off
             else:
-                game_state.set_trying_to_buy(self.tower_spec)
+                total_cash = game_state.get_resources(ResourceTypes.MONEY)
+                if self.tower_spec is not None and self.tower_spec.cost <= total_cash:
+                    game_state.set_trying_to_buy(self.tower_spec)
+                else:
+                    game_state.set_trying_to_buy(None)
 
 
 class HoverInfoBox(UiElement):
