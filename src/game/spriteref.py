@@ -52,6 +52,7 @@ class MainSheet(spritesheets.SpriteSheet):
         self.veg_symbol = None
         self.mushroom_symbol = None
         self.flower_symbol = None
+        self.blight_symbol = None
 
         self.contract_panels = []
         self.contract_panel_fruit = None
@@ -99,6 +100,7 @@ class MainSheet(spritesheets.SpriteSheet):
         self.veg_symbol = sprites.ImageModel(312, 80, 8, 8, offset=start_pos)
         self.mushroom_symbol = sprites.ImageModel(320, 80, 8, 8, offset=start_pos)
         self.flower_symbol = sprites.ImageModel(328, 80, 8, 8, offset=start_pos)
+        self.blight_symbol = sprites.ImageModel(336, 80, 12, 11, offset=start_pos)
 
         self.contract_panels = [sprites.ImageModel(128 + i * 80, 128, 80, 69, offset=start_pos) for i in range(0, 4)]
         self.contract_panel_fruit = self.contract_panels[0]

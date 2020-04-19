@@ -1,4 +1,5 @@
 import pygame
+import math
 
 import src.engine.renderengine as renderengine
 import src.engine.sprites as sprites
@@ -12,13 +13,39 @@ import src.game.towers as towers
 
 
 class ResourceType:
-    FRUIT = "FRUIT"
-    VEG = "VEG"
-    MUSHROOM = "MUSHROOM"
-    FLOWER = "FLOWER"
-    BLIGHT = "BLIGHT"
-    MONEY = "MONEY"
-    VP = "VP"
+    def __init__(self, identifier, color, symbol_getter=None):
+        self.identifier = identifier
+        self.color = color
+        self.symbol_getter = symbol_getter
+
+    def get_color(self):
+        return self.color
+
+    def get_symbol(self):
+        if self.symbol_getter is None:
+            return None
+        else:
+            return self.symbol_getter()
+
+    def __eq__(self, other):
+        if isinstance(other, ResourceType):
+            return self.identifier == other.identifier
+        else:
+            return False
+
+    def __hash__(self):
+        return hash(self.identifier)
+
+
+class ResourceTypes:
+
+    FRUIT = ResourceType("FRUIT", colors.FRUIT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.fruit_symbol)
+    VEG = ResourceType("VEG", colors.VEG_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.veg_symbol)
+    MUSHROOM = ResourceType("MUSHROOM", colors.MUSHROOM_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.mushroom_symbol)
+    FLOWER = ResourceType("FLOWER", colors.FLOWER_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.flower_symbol)
+    BLIGHT = ResourceType("BLIGHT", colors.BLIGHT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.blight_symbol)
+    MONEY = ResourceType("MONEY", colors.WHITE, symbol_getter=None)
+    VP = ResourceType("VP", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.vp_symbol)
 
 
 class GroundType:
@@ -41,13 +68,13 @@ class GameState:
         self.max_blight = 100  # you lose when you hit this
 
         self.resources = {
-            ResourceType.FRUIT: 0,
-            ResourceType.VEG: 0,
-            ResourceType.MUSHROOM: 0,
-            ResourceType.FLOWER: 0,
-            ResourceType.BLIGHT: 0,
-            ResourceType.MONEY: 3000,
-            ResourceType.VP: 0
+            ResourceTypes.FRUIT: 0,
+            ResourceTypes.VEG: 0,
+            ResourceTypes.MUSHROOM: 0,
+            ResourceTypes.FLOWER: 0,
+            ResourceTypes.BLIGHT: 0,
+            ResourceTypes.MONEY: 3000,
+            ResourceTypes.VP: 0
         }
 
         self.day = 1
@@ -57,6 +84,10 @@ class GameState:
 
         self._always_show_grid = False
 
+        self.floating_text_duration = 60
+        self.floating_text_height = 16
+        self.floating_texts = []  # list of [text, color, pos_in_world, elapsed_time]
+
     def get_resources(self, res_type):
         return self.resources[res_type]
 
@@ -65,6 +96,9 @@ class GameState:
             if self.world_tiles[xy].get_tower_spec() is not None:
                 if cond is None or cond(self.world_tiles[xy].get_tower_spec()):
                     yield xy
+
+    def add_floating_text_in_world(self, text, color, pos):
+        self.floating_texts.append([text, color, pos, 0])
 
     def do_next_day_seq(self):
         self.day += 1
@@ -76,12 +110,21 @@ class GameState:
             tileinfo = self.get_tile_info(shovel_xy)
             tileinfo.set_tower_spec(None)
 
-    def inc_resources(self, res_type, val):
+    def inc_resources(self, res_type, val, with_effect_at_pos=None):
+        old_val = self.resources[res_type]
         self.resources[res_type] += val
         if self.resources[res_type] < 0:
             print("WARN: resource {} is less than zero ({}), correcting".format(res_type, self.resources[res_type]))
             self.resources[res_type] = 0
-        return self.resources[res_type]
+
+        change = self.resources[res_type] - old_val
+        if with_effect_at_pos is not None and change != 0:
+            text = "+" if change > 0 else "-"
+            if res_type == ResourceTypes.MONEY:
+                text += "$"
+            text += str(change)
+
+            self.add_floating_text_in_world(text, res_type.get_color(), with_effect_at_pos)
 
     def additional_stat_value_at(self, stat_type, xy):
         if stat_type.is_production():
@@ -115,32 +158,50 @@ class GameState:
                 return False  # already a tower there
             elif tileinfo.ground_type == GroundType.INACCESSIBLE:
                 return False
-            elif self.trying_to_buy.cost < 0 or self.trying_to_buy.cost > self.get_resources(ResourceType.MONEY):
+            elif self.trying_to_buy.cost < 0 or self.trying_to_buy.cost > self.get_resources(ResourceTypes.MONEY):
                 return False
             elif tileinfo.ground_type == GroundType.ROCK and not self.trying_to_buy.is_utility():
                 return False
+            elif tileinfo.ground_type == GroundType.DIRT and self.trying_to_buy.tower_type == towers.TowerTypes.SHOVEL:
+                return False  # there's no reason to put a shovel on the dirt
 
         # we can do it!
         return True
 
     def try_to_build_at(self, pos):
         if self.can_build_at(pos):
-            self.inc_resources(ResourceType.MONEY, -self.trying_to_buy.cost)
+            self.inc_resources(ResourceTypes.MONEY, -self.trying_to_buy.cost)
             self.world_tiles[pos].set_tower_spec(self.trying_to_buy)
             print("INFO: placed tower {} at {}".format(self.trying_to_buy.name, pos))
             return True
         else:
             return False
 
+    def can_sell_at(self, pos):
+        if pos not in self.world_tiles:
+            return False
+        tileinfo = self.world_tiles[pos]
+        if tileinfo.get_tower_spec() is None:
+            return False
+        if not tileinfo.get_tower_spec().can_sell():
+            return False
+        return True
+
     def try_to_sell_at(self, pos):
-        print("trying to sell at {}".format(pos))
-        return False
+        if self.can_sell_at(pos):
+            tileinfo = self.world_tiles[pos]
+            tower = tileinfo.get_tower_spec()
+            tileinfo.set_tower_spec(None)
+
+            sell_price = tower.get_sell_price()
+            self.inc_resources(ResourceTypes.MONEY, sell_price, with_effect_at_pos=pos)
+            print("INFO: sold tower {} at {}".format(tower.name, pos))
 
     def should_show_empty_tiles(self):
         return (self.trying_to_buy is not None and self.trying_to_buy.is_utility()) or self._always_show_grid
 
     def get_blight_pcnt(self):
-        return util.Utils.bound(self.get_resources(ResourceType.BLIGHT) / self.max_blight, 0, 1)
+        return util.Utils.bound(self.get_resources(ResourceTypes.BLIGHT) / self.max_blight, 0, 1)
 
     def get_tile_info(self, xy):
         if xy in self.world_tiles:
@@ -183,14 +244,27 @@ class GameState:
                     self.world_tiles[xy] = TileInfo(GroundType.ROCK)
 
     def update(self):
-        self.handle_user_inputs()
+        self._handle_floating_texts()
+        self._handle_user_inputs()
 
         self.renderer.update(self)
 
     def set_hover_element(self, obj):
         self.current_hover_obj = obj
 
-    def handle_user_inputs(self):
+    def _handle_floating_texts(self):
+        if len(self.floating_texts) > 0:
+            new_texts = []
+            for textinfo in self.floating_texts:
+                elapsed_time = textinfo[3]
+                if elapsed_time >= self.floating_text_duration:
+                    continue
+                else:
+                    textinfo[3] = elapsed_time + 1
+                    new_texts.append(textinfo)
+            self.floating_texts = new_texts
+
+    def _handle_user_inputs(self):
         input_state = inputs.get_instance()
 
         if input_state.was_pressed(pygame.K_g):
@@ -646,7 +720,7 @@ class BlightBarElement(UiElement):
         return True
 
     def get_hover_text(self, game_state):
-        first_line = "Blight at {}/{}".format(game_state.get_resources(ResourceType.BLIGHT), game_state.max_blight)
+        first_line = "Blight at {}/{}".format(game_state.get_resources(ResourceTypes.BLIGHT), game_state.max_blight)
         return sprites.TextBuilder()\
                 .addLine(first_line, color=colors.BLIGHT_COLOR)\
                 .addLine("When it fills completely, the garden dies and you lose.")
@@ -848,6 +922,8 @@ class WorldSceneElement(UiElement):
         self.big_rock_sprite = None
         self.cells = {}  # (x, y) -> CellInWorldButton
 
+        self.floating_text_sprites = []
+
     def all_sprites(self):
         if self.big_rock_sprite is not None:
             yield self.big_rock_sprite
@@ -855,6 +931,10 @@ class WorldSceneElement(UiElement):
         for key in self.cells:
             butt = self.cells[key]
             for spr in butt.all_sprites():
+                yield spr
+
+        for text_sprite in self.floating_text_sprites:
+            for spr in text_sprite.all_sprites():
                 yield spr
 
     def all_children(self):
@@ -899,6 +979,26 @@ class WorldSceneElement(UiElement):
             button.set_xy_in_world(xy)
             button.update(game_state)
 
+        while len(self.floating_text_sprites) > len(game_state.floating_texts):
+            to_del = self.floating_text_sprites.pop()
+            renderengine.get_instance().remove(to_del)
+
+        while len(self.floating_text_sprites) < len(game_state.floating_texts):
+            self.floating_text_sprites.append(sprites.TextSprite(spriteref.LAYER_SCENE_FG, 0, 0, "abc", scale=1))
+
+        for i in range(0, len(game_state.floating_texts)):
+            text, color, pos_in_world, elapsed_time = game_state.floating_texts[i]
+            text_sprite = self.floating_text_sprites[i]
+
+            abs_xy = self.get_xy(local=False)
+            center_of_text = (abs_xy[0] + 16 * 2 * (pos_in_world[0] + 1.5),
+                              abs_xy[1] + 16 * 2 * (pos_in_world[1] + 1.5))
+            height = int(game_state.floating_text_height * elapsed_time / game_state.floating_text_duration) * 2
+            self.floating_text_sprites[i] = text_sprite.update(new_text=text, new_color=color, new_scale=1)
+            text_xy = (center_of_text[0] - self.floating_text_sprites[i].get_size()[0] // 2,
+                       center_of_text[1] - height - self.floating_text_sprites[i].get_size()[1])
+            self.floating_text_sprites[i] = self.floating_text_sprites[i].update(new_x=text_xy[0], new_y=text_xy[1],
+                                                                                 new_depth=-10 + center_of_text[1] / 100)
 
 
 

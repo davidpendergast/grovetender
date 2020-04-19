@@ -94,10 +94,10 @@ class TowerStatTypes:
 
     DIG = TowerStatType("DIG", "Converts rock to dirt.")
     STORAGE = TowerStatType("STORAGE", "Increases storage of all resources by {}.")
-    PURIFYING = TowerStatType("PURIFYING", "Removes {} blight from adjacent tiles")
+    PURIFYING = TowerStatType("PURIFYING", "Removes up to {} blight from adjacent tiles.")
 
     NON_ACTIVATING = TowerStatType("NO_ACTIVATE", "Does not activate.")
-    SELF_DESTRUCT = TowerStatType("SELF_DESTRUCT", "Is removed after activating.")
+    SELF_DESTRUCT = TowerStatType("SELF_DESTRUCT", "Removed after activating.")
 
     SELL_TO_BUY_RATIO = TowerStatType("SELL_RATIO", "Sells for {}% of purchase price.", hidden=True)
 
@@ -299,13 +299,13 @@ def init_towers():
                              {
                                  TowerStatTypes.GROWING: 1,
                                  TowerStatTypes.NON_ACTIVATING: 1
-                             }, 50)
+                             }, 30)
     PURIFICATION_TABLET = TowerSpec("Purification Tablet", TowerTypes.PURIFIER, 1, spriteref.MAIN_SHEET.tombstone_icon,
                                     {
                                         TowerStatTypes.CYCLE_LENGTH: 2,
                                         TowerStatTypes.PURIFYING: 3,
                                         TowerStatTypes.SELF_DESTRUCT: 1
-                                    }, 20)
+                                    }, 50)
 
     BLIGHT_1 = TowerSpec("Blighted Soil", TowerTypes.BLIGHT, 1, spriteref.MAIN_SHEET.blight_icon,
                          {
