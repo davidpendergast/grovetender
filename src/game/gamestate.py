@@ -251,7 +251,7 @@ class GameState:
                     self.world_tiles[xy].set_tower_spec(new_tower_spec)
                     self.add_floating_text_in_world("^", new_tower_spec.tower_type.get_color(), xy, delay=20)
 
-    def inc_resources(self, res_type, val, with_effect_at_pos=None):
+    def inc_resources(self, res_type, val, with_effect_at_pos=None, effect_delay=0):
         old_val = self.resources[res_type]
         self.resources[res_type] += val
         if self.resources[res_type] < 0:
@@ -265,7 +265,7 @@ class GameState:
                 text += "$"
             text += str(change)
 
-            self.add_floating_text_in_world(text, res_type.get_color(), with_effect_at_pos)
+            self.add_floating_text_in_world(text, res_type.get_color(), with_effect_at_pos, delay=effect_delay)
 
     def additional_stat_value_at(self, stat_type, xy):
         if stat_type.is_production():
@@ -341,11 +341,17 @@ class GameState:
         if self.can_sell_at(pos):
             tileinfo = self.world_tiles[pos]
             tower = tileinfo.get_tower_spec()
+
+            mushroom_harvest = tower.stat_value_in_world(towers.TowerStatTypes.MUSHROOM_HARVEST, self, pos)
+
             tileinfo.set_tower_spec(None)
 
             sell_price = tower.get_sell_price()
             self.inc_resources(ResourceTypes.MONEY, sell_price, with_effect_at_pos=pos)
             print("INFO: sold tower {} at {}".format(tower.name, pos))
+
+            if mushroom_harvest > 0:
+                self.inc_resources(ResourceTypes.MUSHROOM, mushroom_harvest, with_effect_at_pos=pos, effect_delay=30)
 
     def should_show_empty_tiles(self):
         return (self.trying_to_buy is not None and self.trying_to_buy.is_utility()) or self._always_show_grid
