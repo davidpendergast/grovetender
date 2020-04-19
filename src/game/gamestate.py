@@ -15,13 +15,17 @@ import src.game.contracts as contracts
 
 
 class ResourceType:
-    def __init__(self, identifier, color, symbol_getter=None):
+    def __init__(self, identifier, name, color, symbol_getter=None):
         self.identifier = identifier
+        self.name = name
         self.color = color
         self.symbol_getter = symbol_getter
 
     def get_color(self):
         return self.color
+
+    def get_name(self):
+        return self.name
 
     def get_symbol(self):
         if self.symbol_getter is None:
@@ -41,13 +45,13 @@ class ResourceType:
 
 class ResourceTypes:
 
-    FRUIT = ResourceType("FRUIT", colors.FRUIT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.fruit_symbol)
-    VEG = ResourceType("VEG", colors.VEG_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.veg_symbol)
-    MUSHROOM = ResourceType("MUSHROOM", colors.MUSHROOM_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.mushroom_symbol)
-    FLOWER = ResourceType("FLOWER", colors.FLOWER_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.flower_symbol)
-    BLIGHT = ResourceType("BLIGHT", colors.BLIGHT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.blight_symbol)
-    MONEY = ResourceType("MONEY", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.money_symbol)
-    VP = ResourceType("VP", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.vp_symbol)
+    FRUIT = ResourceType("FRUIT", "fruit(s)", colors.FRUIT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.fruit_symbol)
+    VEG = ResourceType("VEG", "vegetable(s)", colors.VEG_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.veg_symbol)
+    MUSHROOM = ResourceType("MUSHROOM", "mushroom(s)", colors.MUSHROOM_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.mushroom_symbol)
+    FLOWER = ResourceType("FLOWER", "flower(s)", colors.FLOWER_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.flower_symbol)
+    BLIGHT = ResourceType("BLIGHT", "blight", colors.BLIGHT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.blight_symbol)
+    MONEY = ResourceType("MONEY", "money", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.money_symbol)
+    VP = ResourceType("VP", "victory point(s)", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.vp_symbol)
 
 
 class GroundType:
@@ -107,7 +111,7 @@ class GameState:
 
     def get_max_n_contracts(self):
         if self.day < 15:
-            return 1
+            return 2
         elif self.day < 30:
             return 2
         else:
@@ -117,6 +121,19 @@ class GameState:
         while len(self.active_contracts) < self.get_max_n_contracts():
             new_contract = contracts.gen_contract(self.day)
             self.active_contracts.append(new_contract)
+
+    def can_satisfy_contract(self, contract):
+        for req_type in contract.resource_reqs:
+            quant_needed = contract.resource_reqs[req_type]
+            if self.get_resources(req_type) < quant_needed:
+                return False
+        return True
+
+    def try_to_accept_contract(self, contract):
+        pass
+
+    def reject_contract(self, contract):
+        pass
 
     def all_tower_specs(self, cond=None):
         for xy in self.all_tower_cells(cond=cond):
@@ -470,8 +487,8 @@ class GameState:
     def _get_hover_obj_at(self, game_pos):
         uis_to_check = [self.renderer.ui_main_panel,
                         self.renderer.ui_blight_bar,
-                        self.renderer.world_scene]
-                        # TODO add contracts
+                        self.renderer.world_scene,
+                        self.renderer.ui_contract_panel_row]
         for ui in uis_to_check:
             obj = ui.get_element_for_hover(game_pos)
             if obj is not None:
@@ -481,16 +498,13 @@ class GameState:
     def _get_clicked_obj_at(self, game_pos):
         uis_to_check = [self.renderer.ui_main_panel,
                         self.renderer.ui_blight_bar,
-                        self.renderer.world_scene]
-        # TODO add contracts
+                        self.renderer.world_scene,
+                        self.renderer.ui_contract_panel_row]
         for ui in uis_to_check:
             obj = ui.get_element_for_click(game_pos)
             if obj is not None:
                 return obj
         return None
-
-    def handle_mouse_press(self, button, pos):
-        pass
 
     def get_current_hover_text(self):
         if self.trying_to_buy is not None:
@@ -616,8 +630,11 @@ class UiElement:
 
     def get_element_for_hover(self, pos):
         for child in self.all_children():
-            if child.can_be_hovered() and util.Utils.rect_contains(child.get_rect_for_hover_test(), pos):
-                return child
+            if util.Utils.rect_contains(child.get_rect_for_hover_test(), pos):
+                child_res = child.get_element_for_hover(pos)
+                if child_res is not None:
+                    return child_res
+
         if self.can_be_hovered() and util.Utils.rect_contains(self.get_rect_for_hover_test(), pos):
             return self
         else:
@@ -1102,7 +1119,7 @@ class ResourceLabelElement(UiElement):
         return False
 
     def can_be_hovered(self):
-        return True
+        return self.hover_text_builder is not None
 
     def get_hover_text(self, game_state):
         return self.hover_text_builder
@@ -1121,6 +1138,9 @@ class ResourceLabelElement(UiElement):
 
     def set_text(self, text):
         self.text = text
+
+    def set_res_type(self, res_type):
+        self.res_type = res_type
 
     def set_hover_text(self, hover_text_builder):
         self.hover_text_builder = hover_text_builder
@@ -1212,6 +1232,8 @@ class ContractPanelElement(UiElement):
 
         self.req_labels = []
 
+        self.vp_label = None
+
         self.punish_label = None
         self.money_label = None
         self.days_label = None
@@ -1240,6 +1262,9 @@ class ContractPanelElement(UiElement):
         if self.punish_label is not None:
             for spr in self.punish_label.all_sprites():
                 yield spr
+        if self.vp_label is not None:
+            for spr in self.vp_label.all_sprites():
+                yield spr
         if self.money_label is not None:
             for spr in self.money_label.all_sprites():
                 yield spr
@@ -1260,6 +1285,8 @@ class ContractPanelElement(UiElement):
 
         if self.punish_label is not None:
             yield self.punish_label
+        if self.vp_label is not None:
+            yield  self.vp_label
         if self.money_label is not None:
             yield self.money_label
         if self.days_label is not None:
@@ -1274,7 +1301,16 @@ class ContractPanelElement(UiElement):
         return True
 
     def get_hover_text(self, game_state):
-        return None
+        res = sprites.TextBuilder().addLine("Collect the following resources to satisfy this goal:")
+
+        req_resources = [res_type for res_type in self.contract.resource_reqs]
+        for i in range(0, len(req_resources)):
+            if i > 0:
+                res.add(", ")
+            resource = req_resources[i]
+            quant = self.contract.resource_reqs[resource]
+            res.add("{} {}".format(quant, resource.get_name()), color=resource.get_color())
+        return res
 
     def update(self, game_state):
         if self.bg_sprite is None:
@@ -1292,6 +1328,163 @@ class ContractPanelElement(UiElement):
         bar_ratio = (bar_w / bar_model.width(), 2)
         self.bar_sprite = self.bar_sprite.update(new_model=bar_model, new_ratio=bar_ratio,
                                                  new_x=abs_xy[0] + 1 * 2, new_y=abs_xy[1] + 65 * 2)
+
+        inner_rect = [8 * 2, 8 * 2, 64 * 2, 48 * 2]  # local coords
+
+        req_types = [r for r in self.contract.resource_reqs]
+
+        while len(self.req_labels) > len(req_types):
+            label = self.req_labels.pop()
+            for spr in label.all_sprites():
+                renderengine.get_instance().remove(spr)
+        while len(self.req_labels) < len(req_types):
+            self.req_labels.append(ResourceLabelElement((0, 0), None, scale=1, symbol_scale=2, parent=self))
+
+        x = inner_rect[0] + 2
+        y = inner_rect[1]
+        y_spacing = 16
+
+        for i in range(0, len(req_types)):
+            res_type = req_types[i]
+            quant = self.contract.resource_reqs[res_type]
+            self.req_labels[i].set_xy((x, y), local=True)
+            self.req_labels[i].set_res_type(res_type)
+            self.req_labels[i].set_text(": {}".format(quant))
+            y += y_spacing
+
+        if self.vp_label is None:
+            self.vp_label = ResourceLabelElement((0, 0), None, scale=1, parent=self)
+        self.vp_label.set_text("VP: {}".format(self.contract.vp_reward))
+        self.vp_label.update(game_state)
+        self.vp_label.set_xy((inner_rect[0] + inner_rect[2] - self.vp_label.get_size()[0] - 2, inner_rect[1]))
+
+        if self.money_label is None:
+            self.money_label = ResourceLabelElement((0, 0), None, scale=1, parent=self)
+        self.money_label.set_text("Reward: ${}".format(self.contract.payout))
+        self.money_label.update(game_state)
+
+        if self.punish_label is None:
+            self.punish_label = ResourceLabelElement((0, 0), ResourceTypes.BLIGHT, scale=1, symbol_scale=2, parent=self)
+        self.punish_label.set_text(": {}".format(self.contract.blight_punishment))
+        self.punish_label.update(game_state)
+
+        y2 = inner_rect[1] + inner_rect[3] - 2 - self.punish_label.get_size()[1]
+        self.punish_label.set_xy((x, y2), local=True)
+
+        y2 -= y_spacing
+        self.money_label.set_xy((x, y2), local=True)
+
+        if self.yes_button is None:
+            self.yes_button = ContractDismissButton(self.contract, True, parent=self)
+        self.yes_button.contract = self.contract
+        self.yes_button.set_xy((64 * 2, 48 * 2), local=True)
+
+        if self.no_button is None:
+            self.no_button = ContractDismissButton(self.contract, False, parent=self)
+        self.no_button.contract = self.contract
+        self.no_button.set_xy((48 * 2, 48 * 2), local=True)
+
+        for child in self.all_children():
+            child.update(game_state)
+
+
+class ContractDismissButton(UiElement):
+
+    def __init__(self, contract, accept, parent=None):
+        UiElement.__init__(self, (0, 0), parent=parent)
+        self.contract = contract
+        self.is_accept = accept
+        self.button_sprite = None
+        self.outline_sprite = None
+
+    def set_contract(self, contract):
+        self.contract = contract
+
+    def get_size(self):
+        if self.button_sprite is not None:
+            return self.button_sprite.size()
+        else:
+            return super().get_size()
+
+    def can_be_hovered(self):
+        return True
+
+    def get_hover_text(self, game_state):
+        if self.is_accept:
+            n_reward = self.contract.payout
+            n_vps = self.contract.vp_reward
+            return sprites.TextBuilder().addLine("Completing this goal will give ${} and {} victory point(s).".format(
+                n_reward, n_vps))
+        else:
+            n_blight = self.contract.blight_punishment
+            return sprites.TextBuilder().addLine("Failing this goal will add {} blight.".format(n_blight),
+                                                 color=colors.BLIGHT_COLOR)
+
+    def can_be_clicked(self):
+        return True
+
+    def do_click(self, button, game_state):
+        if button == 1:
+            if self.is_accept:
+                game_state.try_to_accept_contract(self.contract)
+            else:
+                game_state.reject_contract(self.contract)
+
+    def all_sprites(self):
+        if self.button_sprite is not None:
+            yield self.button_sprite
+        if self.outline_sprite is not None:
+            yield self.outline_sprite
+
+    def get_button_model(self, game_state):
+        if self.is_accept:
+            return spriteref.MAIN_SHEET.yes_icon
+        else:
+            return spriteref.MAIN_SHEET.no_icon
+
+    def get_button_color(self, game_state):
+        if self.is_accept:
+            if game_state.can_satisfy_contract(self.contract):
+                if self == game_state.get_current_hover_obj():
+                    return colors.VEG_COLOR
+                else:
+                    return colors.WHITE
+            else:
+                return colors.GRAY
+        else:
+            if self == game_state.get_current_hover_obj():
+                return colors.BLIGHT_COLOR
+            else:
+                return colors.WHITE
+
+    def get_outline_color(self, game_state):
+        if self.is_accept:
+            if game_state.can_satisfy_contract(self.contract):
+                if self == game_state.get_current_hover_obj():
+                    return colors.RED
+                else:
+                    return colors.WHITE
+            else:
+                return colors.GRAY
+        else:
+            if self == game_state.get_current_hover_obj():
+                return colors.RED
+            else:
+                return colors.WHITE
+
+    def update(self, game_state):
+        abs_xy = self.get_xy(local=False)
+        if self.button_sprite is None:
+            self.button_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_FG, scale=2, depth=10)
+        self.button_sprite = self.button_sprite.update(new_model=self.get_button_model(game_state),
+                                                       new_x=abs_xy[0], new_y=abs_xy[1],
+                                                       new_color=self.get_button_color(game_state))
+
+        if self.outline_sprite is None:
+            self.outline_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_FG, scale=2, depth=5)
+        self.outline_sprite = self.outline_sprite.update(new_model=spriteref.MAIN_SHEET.icon_outline,
+                                                         new_x=abs_xy[0], new_y=abs_xy[1],
+                                                         new_color=self.get_outline_color(game_state))
 
 
 class BlightBarElement(UiElement):

@@ -6,9 +6,10 @@ import src.game.spriteref as spriteref
 
 class ContractState:
 
-    def __init__(self, resource_reqs, payout, blight_punishment, time_limit, bg_sprite):
+    def __init__(self, resource_reqs, payout, vp_reward, blight_punishment, time_limit, bg_sprite):
         self.resource_reqs = resource_reqs  # ResourceType -> int
         self.payout = payout
+        self.vp_reward = vp_reward
         self.blight_punishment = blight_punishment
         self.time_limit = time_limit
         self.days_active = 1
@@ -55,7 +56,7 @@ def gen_contract(day):
 
     res_reqs = {}
     for res_type in req_types_for_res:
-        max_quant = math.ceil(QUANTITY_SCALES[res_type] * (QUANT_GROWTH_MULT_PER_DAY * day) ** (1 + QUANT_GROWTH_EXP_PER_DAY * day))
+        max_quant = math.ceil(QUANTITY_SCALES[res_type] * (1 + QUANT_GROWTH_MULT_PER_DAY * day) ** (1 + QUANT_GROWTH_EXP_PER_DAY * day))
         min_quant = max(1, int(max_quant * 0.33))
         quant = min_quant + int(random.random() * (max_quant + 1 - min_quant))
 
@@ -65,9 +66,13 @@ def gen_contract(day):
     for res_type in res_reqs:
         difficulty_val += res_reqs[res_type] * DIFFICULTY_WEIGHTS[res_type]
 
-    MONEY_SCALE = 15 - (4 * min(100, day)/100)
+    MONEY_SCALE = 8 - (3 * min(100, day)/100)
 
     res_payout = math.ceil(MONEY_SCALE * math.sqrt(difficulty_val))
+
+    VP_SCALE = 1
+
+    res_vps = math.ceil(VP_SCALE * math.sqrt(difficulty_val))
 
     PUNISHMENT_GROWTH_PER_DAY = 0.05
 
@@ -89,4 +94,4 @@ def gen_contract(day):
     else:
         bg_sprite = spriteref.MAIN_SHEET.contract_panel_flower
 
-    return ContractState(res_reqs, res_payout, res_punishment, res_time_limit, bg_sprite)
+    return ContractState(res_reqs, res_payout, res_vps, res_punishment, res_time_limit, bg_sprite)
