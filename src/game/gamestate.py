@@ -116,6 +116,12 @@ class GameState:
         else:
             return None
 
+    def get_activation_energy_at(self, xy):
+        if xy in self.world_tiles:
+            return self.world_tiles[xy].activation_energy
+        else:
+            return 0
+
     def add_floating_text_in_world(self, text, color, pos, delay=0):
         self.floating_texts.append([text, color, pos, -delay])
 

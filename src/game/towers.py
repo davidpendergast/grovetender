@@ -154,8 +154,20 @@ class TowerSpec:
         res = sprites.TextBuilder()
         res.add(self.name, self.get_color())
 
+        if game_state is not None and xy is not None:
+            if self.stat_value_in_world(TowerStatTypes.NON_ACTIVATING, game_state, xy) <= 0:
+                # we activate
+                energy = max(0, game_state.get_activation_energy_at(xy))
+                cycle_len = max(0, self.stat_value_in_world(TowerStatTypes.CYCLE_LENGTH, game_state, xy))
+                energy = min(cycle_len, energy)
+                if cycle_len > 0 and energy > 0:
+                    bar_text = "cycle: [{}]".format("X" * energy + "-" * (cycle_len - energy))
+                    n_spaces = max(20 - len(res.text), 1)
+                    res.add(" " * n_spaces)
+                    res.add(bar_text, color=colors.YELLOW)
+
         if self.can_sell():
-            n_spaces = max(50 - len(self.name), 1)
+            n_spaces = max(50 - len(res.text), 1)
             res.add(" " * n_spaces)
 
             if xy is None:
@@ -163,6 +175,8 @@ class TowerSpec:
                 res.addLine("cost: ${}".format(self.cost))
             else:
                 res.addLine("sell: ${}".format(self.get_sell_price()))
+        else:
+            res.addLine(" ")  # finish the line
 
         # the ordering works out because python happens to use linked hash maps
         for stat_type in self.stats:
@@ -177,6 +191,12 @@ class TowerSpec:
             if stat_val <= 0:
                 continue
             res.addLine(stat_type.get_desc(stat_val), color=stat_type.get_color())
+
+        n_lines = res.text.count("\n") - 1
+        if self.can_sell() and game_state is not None and xy is not None and n_lines <= 3:
+            if n_lines < 3:
+                res.add("\n" * (3 - n_lines))  # want this to be at the bottom
+            res.addLine("Right-click to sell.", color=colors.GRAY)
 
         return res
 
