@@ -11,6 +11,7 @@ import src.game.spriteref as spriteref
 import src.game.globalstate as gs
 import src.game.colors as colors
 import src.game.towers as towers
+import src.game.contracts as contracts
 
 
 class ResourceType:
@@ -67,7 +68,7 @@ class GameState:
         self.current_hover_obj = None  # the thing you're hovering over
 
         self.max_blight = 100  # you lose when you hit this
-        self.base_storage = 3
+        self.base_storage = 5
 
         self.resources = {
             ResourceTypes.FRUIT: 0,
@@ -92,6 +93,9 @@ class GameState:
         self.floating_text_height = 16
         self.floating_texts = []  # list of [text, color, pos_in_world, elapsed_time]
 
+        self.active_contracts = []  # list of Contracts
+        self.fill_contracts()
+
     def get_resources(self, res_type):
         return self.resources[res_type]
 
@@ -100,6 +104,19 @@ class GameState:
             if self.world_tiles[xy].get_tower_spec() is not None:
                 if cond is None or cond(self.world_tiles[xy].get_tower_spec()):
                     yield xy
+
+    def get_max_n_contracts(self):
+        if self.day < 15:
+            return 1
+        elif self.day < 30:
+            return 2
+        else:
+            return 3
+
+    def fill_contracts(self):
+        while len(self.active_contracts) < self.get_max_n_contracts():
+            new_contract = contracts.gen_contract(self.day)
+            self.active_contracts.append(new_contract)
 
     def all_tower_specs(self, cond=None):
         for xy in self.all_tower_cells(cond=cond):
