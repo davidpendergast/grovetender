@@ -66,7 +66,7 @@ class GameState:
     def set_trying_to_buy(self, tower_spec):
         self.trying_to_buy = tower_spec
 
-    def try_to_build_at(self, pos):
+    def can_build_at(self, pos):
         if self.trying_to_buy is None or pos not in self.world_tiles:
             return False
         else:
@@ -82,11 +82,17 @@ class GameState:
             elif tileinfo.ground_type == GroundType.ROCK and not self.trying_to_buy.is_utility():
                 return False
 
-            # we can do it!
+        # we can do it!
+        return True
+
+    def try_to_build_at(self, pos):
+        if self.can_build_at(pos):
             self.inc_resources(ResourceType.MONEY, -self.trying_to_buy.cost)
-            tileinfo.tower_spec = self.trying_to_buy
+            self.world_tiles[pos].tower_spec = self.trying_to_buy
             print("INFO: placed tower {} at {}".format(self.trying_to_buy.name, pos))
             return True
+        else:
+            return False
 
     def try_to_sell_at(self, pos):
         print("trying to sell at {}".format(pos))
@@ -103,6 +109,13 @@ class GameState:
             return self.world_tiles[xy]
         else:
             return None
+
+    def screen_pos_to_world_cell_and_snapped_coords(self, xy):
+        element_at = self._get_hover_obj_at(xy)
+        if element_at is not None and isinstance(element_at, CellInWorldButton):
+            return element_at.xy_in_world, element_at.get_xy(local=False)  # ok this is pretty bad lol
+
+        return None, None
 
     def _populate_initial_world_tiles(self):
         inaccessible = [(0, i) for i in range(4, 8)]        # the rock is kinda irregular
@@ -217,6 +230,8 @@ class Renderer:
 
         self.world_scene = WorldSceneElement()
 
+        self.cursor_icon = CursorIconElement()
+
     def all_sprites(self):
         for spr in self.ui_main_panel.all_sprites():
             yield spr
@@ -225,6 +240,8 @@ class Renderer:
         for spr in self.ui_hover_info_box.all_sprites():
             yield spr
         for spr in self.world_scene.all_sprites():
+            yield spr
+        for spr in self.cursor_icon.all_sprites():
             yield spr
 
     def update(self, game_state):
@@ -237,6 +254,7 @@ class Renderer:
         self.ui_main_panel.update(game_state)
         self.ui_blight_bar.update(game_state)
         self.ui_hover_info_box.update(game_state)
+        self.cursor_icon.update(game_state)
 
         self.world_scene.update(game_state)
 
@@ -663,9 +681,11 @@ class CellInWorldButton(UiElement):
         return True
 
     def do_click(self, button, game_state):
-        if button == 1:
-            game_state.try_to_build_at(self.xy_in_world)
-        else:
+        if game_state.trying_to_buy is not None:
+            if button == 1:
+                game_state.try_to_build_at(self.xy_in_world)
+            game_state.set_trying_to_buy(None)
+        elif button != 1:
             game_state.try_to_sell_at(self.xy_in_world)
 
     def set_xy_in_world(self, xy):
@@ -724,6 +744,60 @@ class CellInWorldButton(UiElement):
             if self.icon_outline_sprite is not None:
                 renderengine.get_instance().remove(self.icon_outline_sprite)
                 self.icon_outline_sprite = None
+
+
+class CursorIconElement(UiElement):
+
+    def __init__(self):
+        UiElement.__init__(self, (0, 0), parent=None)
+
+        self.icon_sprite = None
+        self.icon_outline_sprite = None
+
+    def all_sprites(self):
+        if self.icon_sprite is not None:
+            yield self.icon_sprite
+        if self.icon_outline_sprite is not None:
+            yield self.icon_outline_sprite
+
+    def update(self, game_state):
+        mouse_pos = inputs.get_instance().mouse_pos()
+        if mouse_pos is None or game_state.trying_to_buy is None:
+            if self.icon_sprite is not None:
+                renderengine.get_instance().remove(self.icon_sprite)
+                self.icon_sprite = None
+            if self.icon_outline_sprite is not None:
+                renderengine.get_instance().remove(self.icon_outline_sprite)
+                self.icon_outline_sprite = None
+        else:
+            icon_model = game_state.trying_to_buy.get_icon()
+            if self.icon_sprite is None:
+                self.icon_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_TOOLTIP, scale=2, depth=10)
+
+            outline_color = None
+            x = mouse_pos[0] - icon_model.width() * 2 // 2
+            y = mouse_pos[1] - icon_model.height() * 2 // 2
+
+            xy_in_world, snapped_coords = game_state.screen_pos_to_world_cell_and_snapped_coords(mouse_pos)
+
+            if xy_in_world is not None and game_state.can_build_at(xy_in_world):
+                tileinfo = game_state.get_tile_info(xy_in_world)
+                outline_color = colors.DIRT_COLOR if tileinfo.ground_type == GroundType.DIRT else colors.WHITE
+                x = snapped_coords[0]
+                y = snapped_coords[1]
+
+            self.icon_sprite = self.icon_sprite.update(new_model=icon_model, new_x=x, new_y=y)
+
+            if outline_color is None:
+                if self.icon_outline_sprite is not None:
+                    renderengine.get_instance().remove(self.icon_outline_sprite)
+                    self.icon_outline_sprite = None
+            else:
+                if self.icon_outline_sprite is None:
+                    self.icon_outline_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_TOOLTIP, scale=2, depth=5)
+                self.icon_outline_sprite = self.icon_outline_sprite.update(new_model=spriteref.MAIN_SHEET.icon_outline,
+                                                                           new_x=x, new_y=y,
+                                                                           new_color=outline_color)
 
 
 class WorldSceneElement(UiElement):
