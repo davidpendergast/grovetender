@@ -88,6 +88,8 @@ class GameState:
 
         self.day = 1
 
+        self.incoming_blight = 0
+
         self.world_tiles = {}  # (x, y) -> TileInfo
         self._populate_initial_world_tiles()
 
@@ -111,7 +113,7 @@ class GameState:
 
     def get_max_n_contracts(self):
         if self.day < 15:
-            return 2
+            return 1
         elif self.day < 30:
             return 2
         else:
@@ -130,10 +132,25 @@ class GameState:
         return True
 
     def try_to_accept_contract(self, contract):
-        pass
+        if self.can_satisfy_contract(contract):
+            for req_type in contract.resource_reqs:
+                quant = contract.resource_reqs[req_type]
+                self.inc_resources(req_type, -quant)
+            self.inc_resources(ResourceTypes.MONEY, contract.payout)
+            self.inc_resources(ResourceTypes.VP, contract.vp_reward)
+
+            print("INFO: completed contract")
+            if contract in self.active_contracts:
+                self.active_contracts.remove(contract)
 
     def reject_contract(self, contract):
-        pass
+        blight = contract.blight_punishment
+        self.inc_resources(ResourceTypes.BLIGHT, blight)
+        self.incoming_blight += blight
+        print("INFO: rejected contract")
+
+        if contract in self.active_contracts:
+            self.active_contracts.remove(contract)
 
     def all_tower_specs(self, cond=None):
         for xy in self.all_tower_cells(cond=cond):
@@ -164,6 +181,9 @@ class GameState:
         for spec in self.all_tower_specs():
             res += spec.stat_value(towers.TowerStatTypes.STORAGE)
         return max(0, res)
+
+    def is_game_over(self):
+        return self.get_resources(ResourceTypes.BLIGHT) >= self.max_blight
 
     def do_next_day_seq(self):
         self.day += 1
@@ -285,12 +305,45 @@ class GameState:
                     self.world_tiles[xy].set_tower_spec(new_tower_spec)
                     self.add_floating_text_in_world("^", new_tower_spec.tower_type.get_color(), xy, delay=20)
 
+        # uptick contracts, possibly failing them if they've expired
+        failed_contracts = []
+        for c in self.active_contracts:
+            if c.days_active >= c.time_limit:
+                failed_contracts.append(c)
+            else:
+                c.days_active += 1
+        for c in failed_contracts:
+            self.reject_contract(c)
+
+        if self.incoming_blight > 0:
+            all_valid_tiles = []
+            to_place = towers.BLIGHT_1
+            for xy in self.world_tiles:
+                if self.can_place_at(to_place, xy):
+                    all_valid_tiles.append(xy)
+            random.shuffle(all_valid_tiles)
+
+            # add incoming blight
+            for _ in range(0, self.incoming_blight):
+                if len(all_valid_tiles) == 0:
+                    break
+                else:
+                    new_blight_xy = all_valid_tiles.pop()
+                    self.world_tiles[new_blight_xy].set_tower_spec(to_place)
+        self.incoming_blight = 0
+
+        # refill contracts
+        self.fill_contracts()
+
     def inc_resources(self, res_type, val, with_effect_at_pos=None, effect_delay=0):
         old_val = self.resources[res_type]
         self.resources[res_type] += val
         if self.resources[res_type] < 0:
             print("WARN: resource {} is less than zero ({}), correcting".format(res_type, self.resources[res_type]))
             self.resources[res_type] = 0
+
+        if res_type == ResourceTypes.BLIGHT:
+            self.resources[ResourceTypes.BLIGHT] = min(self.max_blight, self.resources[ResourceTypes.BLIGHT])
 
         change = self.resources[res_type] - old_val
         if with_effect_at_pos is not None and change != 0:
@@ -332,11 +385,15 @@ class GameState:
             tileinfo = self.world_tiles[pos]
             if tileinfo is None:
                 return False
-            elif tileinfo.get_tower_spec() is not None:
-                return False  # already a tower there
-            elif tileinfo.ground_type == GroundType.INACCESSIBLE:
+            if tileinfo.get_tower_spec() is not None:
+                if tower_spec.is_blight():
+                    return False # only blight can slam over other towers
+                elif tileinfo.get_tower_spec().is_blight():
+                    return False # but blight can't be slammed over
+
+            if tileinfo.ground_type == GroundType.INACCESSIBLE:
                 return False
-            elif tileinfo.ground_type == GroundType.ROCK and not tower_spec.is_utility():
+            elif tileinfo.ground_type == GroundType.ROCK and not tower_spec.is_utility() and not tower_spec.is_blight():
                 return False
             elif tileinfo.ground_type == GroundType.DIRT and tower_spec.tower_type == towers.TowerTypes.SHOVEL:
                 return False  # there's no reason to put a shovel on the dirt
@@ -437,7 +494,7 @@ class GameState:
         self._handle_floating_texts()
         self._handle_user_inputs()
 
-        if self._requested_next_day:
+        if self._requested_next_day and not self.is_game_over():
             self.do_next_day_seq()
             self._requested_next_day = False
 
@@ -654,7 +711,10 @@ class UiElement:
 
     def get_element_for_click(self, pos):
         for child in self.all_children():
-            if child.can_be_clicked() and util.Utils.rect_contains(child.get_rect(local=False), pos):
+            if util.Utils.rect_contains(child.get_rect(local=False), pos):
+                child_res = child.get_element_for_click(pos)
+                if child_res is not None:
+                    return child_res
                 return child
         if self.can_be_clicked() and util.Utils.rect_contains(self.get_rect(local=False), pos):
             return self
@@ -882,16 +942,19 @@ class NextDayButton(UiElement):
         return True
 
     def get_hover_text(self, game_state):
-        res = sprites.TextBuilder()
-        res.addLine("Advances to the next day.")
+        if not game_state.is_game_over():
+            res = sprites.TextBuilder()
+            res.addLine("Advances to the next day.")
 
-        gray = colors.darker(colors.WHITE, pcnt=0.3)
-        #            ##############################################################
-        res.addLine("Buy towers at the top right. Use them to produce resources and", color=gray)
-        res.addLine("complete the goal cards along the top. When you miss or cancel", color=gray)
-        res.addLine("a goal, blight will spread and kill your garden.", color=gray)
-        res.addLine("How long can you... Keep it Alive?", color=colors.WHITE)
-        return res
+            gray = colors.darker(colors.WHITE, pcnt=0.3)
+            #            ##############################################################
+            res.addLine("Buy towers at the top right. Use them to produce resources and", color=gray)
+            res.addLine("complete the goal cards along the top. When you miss or cancel", color=gray)
+            res.addLine("a goal, blight will spread and kill your garden.", color=gray)
+            res.addLine("How long can you... Keep it Alive?", color=colors.WHITE)
+            return res
+        else:
+            pass
 
     def can_be_clicked(self):
         return True
@@ -1310,6 +1373,13 @@ class ContractPanelElement(UiElement):
             resource = req_resources[i]
             quant = self.contract.resource_reqs[resource]
             res.add("{} {}".format(quant, resource.get_name()), color=resource.get_color())
+
+        days_remaining = max(0, self.contract.time_limit - self.contract.days_active + 1)
+        if days_remaining == 1:
+            res.add("\n\nLast day to complete!")
+        else:
+            res.add("\n\n{} day(s) left to complete.".format(days_remaining))
+
         return res
 
     def update(self, game_state):

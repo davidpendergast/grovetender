@@ -80,7 +80,7 @@ def gen_contract(day):
     res_punishment = math.ceil((0.5 + random.random() / 2) * max_punishment)
 
     TIME_LIMIT_LOG_SCALE = 2
-    res_time_limit = 4 + TIME_LIMIT_LOG_SCALE * math.log(difficulty_val, math.e)
+    res_time_limit = int(4 + TIME_LIMIT_LOG_SCALE * math.log(difficulty_val, math.e))
 
     req_types_for_res.sort(key=lambda typ: res_reqs[typ] * DIFFICULTY_WEIGHTS[typ], reverse=True)
 

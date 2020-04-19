@@ -44,7 +44,7 @@ class MainSheet(spritesheets.SpriteSheet):
 
         self.tile_empty = None
         self.tile_dirt = None
-        self.blight_icon = None
+        self.blight_icons = []
 
         self.vp_symbol = None
         self.money_symbol = None
@@ -96,7 +96,8 @@ class MainSheet(spritesheets.SpriteSheet):
 
         self.tile_empty = sprites.ImageModel(208, 80, 16, 16, offset=start_pos)
         self.tile_dirt = sprites.ImageModel(224, 80, 16, 16, offset=start_pos)
-        self.blight_icon = sprites.ImageModel(240, 80, 16, 16, offset=start_pos)
+
+        self.blight_icons = [sprites.ImageModel(240, 80 + i * 16, 16, 16, offset=start_pos) for i in range(0, 3)]
 
         self.vp_symbol = sprites.ImageModel(272, 80, 17, 9, offset=start_pos)
         self.money_symbol = sprites.ImageModel(272, 96, 12, 13, offset=start_pos)

@@ -203,6 +203,9 @@ class TowerSpec:
     def is_utility(self):
         return self.tower_type.is_utility()
 
+    def is_blight(self):
+        return self.tower_type == TowerTypes.BLIGHT
+
 
 FRUIT_1 = None
 FRUIT_2 = None
@@ -344,20 +347,20 @@ def init_towers():
                                         TowerStatTypes.SELF_DESTRUCT: 1
                                     }, 50)
 
-    BLIGHT_1 = TowerSpec("Blighted Soil", TowerTypes.BLIGHT, 1, spriteref.MAIN_SHEET.blight_icon,
+    BLIGHT_1 = TowerSpec("Blighted Terrain", TowerTypes.BLIGHT, 1, spriteref.MAIN_SHEET.blight_icons[0],
                          {
                             TowerStatTypes.CYCLE_LENGTH: 3,
                             TowerStatTypes.UPGRADING: 30,
                             TowerStatTypes.SPREADING: 10,
                          }, -1)
-    BLIGHT_2 = TowerSpec("Blighted Growth", TowerTypes.BLIGHT, 2, spriteref.MAIN_SHEET.blight_icon,
+    BLIGHT_2 = TowerSpec("Blighted Growth", TowerTypes.BLIGHT, 2, spriteref.MAIN_SHEET.blight_icons[1],
                          {
                              TowerStatTypes.CYCLE_LENGTH: 2,
                              TowerStatTypes.UPGRADING: 30,
                              TowerStatTypes.SPREADING: 20,
                              TowerStatTypes.BLIGHT_PRODUCTION: 1,
                          }, -1)
-    BLIGHT_3 = TowerSpec("Blighted Abomination", TowerTypes.BLIGHT, 3, spriteref.MAIN_SHEET.blight_icon,
+    BLIGHT_3 = TowerSpec("Blighted Abomination", TowerTypes.BLIGHT, 3, spriteref.MAIN_SHEET.blight_icons[2],
                          {
                              TowerStatTypes.CYCLE_LENGTH: 1,
                              TowerStatTypes.SPREADING: 30,
