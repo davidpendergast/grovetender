@@ -50,6 +50,8 @@ class GameState:
             ResourceType.VP: 0
         }
 
+        self.day = 1
+
         self.world_tiles = {}  # (x, y) -> TileInfo
         self._populate_initial_world_tiles()
 
@@ -58,12 +60,46 @@ class GameState:
     def get_resources(self, res_type):
         return self.resources[res_type]
 
+    def all_tower_cells(self, cond=None):
+        for xy in self.world_tiles:
+            if self.world_tiles[xy].get_tower_spec() is not None:
+                if cond is None or cond(self.world_tiles[xy].get_tower_spec()):
+                    yield xy
+
+    def do_next_day_seq(self):
+        self.day += 1
+
+        for xy in self.all_tower_cells():
+            pass
+
+        for shovel_xy in self.all_tower_cells(lambda spec: spec.get_type() == towers.TowerTypes.SHOVEL):
+            tileinfo = self.get_tile_info(shovel_xy)
+            tileinfo.set_tower_spec(None)
+
     def inc_resources(self, res_type, val):
         self.resources[res_type] += val
         if self.resources[res_type] < 0:
             print("WARN: resource {} is less than zero ({}), correcting".format(res_type, self.resources[res_type]))
             self.resources[res_type] = 0
         return self.resources[res_type]
+
+    def additional_stat_value_at(self, stat_type, xy):
+        if stat_type.is_production():
+            adjacents = [n for n in util.Utils.neighbors(xy[0], xy[1], and_diags=True)]
+            res = self.sum_of_stat_values_from_towers(towers.TowerStatTypes.GROWING, adjacents)
+            res -= self.sum_of_stat_values_from_towers(towers.TowerStatTypes.WITHERING, adjacents)
+            return res
+        else:
+            return 0
+
+    def sum_of_stat_values_from_towers(self, stat_type, xys):
+        res = 0
+        for xy in xys:
+            if xy in self.world_tiles:
+                tileinfo = self.world_tiles[xy]
+                if tileinfo.get_tower_spec() is not None:
+                    res += tileinfo.get_tower_spec().stat_value(stat_type)
+        return res
 
     def set_trying_to_buy(self, tower_spec):
         self.trying_to_buy = tower_spec
@@ -75,7 +111,7 @@ class GameState:
             tileinfo = self.world_tiles[pos]
             if tileinfo is None:
                 return False
-            elif tileinfo.tower_spec is not None:
+            elif tileinfo.get_tower_spec() is not None:
                 return False  # already a tower there
             elif tileinfo.ground_type == GroundType.INACCESSIBLE:
                 return False
@@ -90,7 +126,7 @@ class GameState:
     def try_to_build_at(self, pos):
         if self.can_build_at(pos):
             self.inc_resources(ResourceType.MONEY, -self.trying_to_buy.cost)
-            self.world_tiles[pos].tower_spec = self.trying_to_buy
+            self.world_tiles[pos].set_tower_spec(self.trying_to_buy)
             print("INFO: placed tower {} at {}".format(self.trying_to_buy.name, pos))
             return True
         else:
@@ -217,11 +253,17 @@ class GameState:
 class TileInfo:
 
     def __init__(self, ground_type):
-        self.tower_spec = None
+        self._tower_spec = None
+        self.activation_count = 0
         self.ground_type = ground_type
 
     def get_tower_spec(self):
-        return self.tower_spec
+        return self._tower_spec
+
+    def set_tower_spec(self, spec):
+        if spec != self._tower_spec:
+            self.activation_count = 0
+        self._tower_spec = spec
 
     def get_ground_type(self):
         return self.ground_type
@@ -566,13 +608,19 @@ class HoverInfoBox(UiElement):
             blight_bar_model = ui_blight_bar_model = spriteref.MAIN_SHEET.ui_blight_bar_bg
             game_size = renderengine.get_instance().get_game_size()
             border = 4  # sheet dims
-            box_height = 36
+            box_height = 40
             inner_rect = [border * 2,
-                          game_size[1] - ui_blight_bar_model.height() * 2 - box_height * 2 - border * 2,
+                          game_size[1] - ui_blight_bar_model.height() * 2 - box_height * 2,
                           ui_blight_bar_model.width() * 2 - border * 4,
                           box_height * 2]
             if self.box_bg_sprite is None:
-                self.box_bg_sprite = sprites.BorderBoxSprite(spriteref.LAYER_UI_BG, inner_rect, scale=2, all_borders=spriteref.MAIN_SHEET.box_borders)
+                self.box_bg_sprite = sprites.BorderBoxSprite(spriteref.LAYER_UI_BG, inner_rect, scale=2,
+                                                             top_left=spriteref.MAIN_SHEET.box_borders[0],
+                                                             top=spriteref.MAIN_SHEET.box_borders[1],
+                                                             top_right=spriteref.MAIN_SHEET.box_borders[2],
+                                                             left=spriteref.MAIN_SHEET.box_borders[3],
+                                                             center=spriteref.MAIN_SHEET.box_borders[4],
+                                                             right=spriteref.MAIN_SHEET.box_borders[5])
             self.box_bg_sprite = self.box_bg_sprite.update(new_rect=inner_rect)
 
             if self.text_sprite is None:
@@ -586,10 +634,6 @@ class BlightBarElement(UiElement):
     def __init__(self):
         UiElement.__init__(self, (0, 0), parent=None)
         self.bg_sprite = None
-
-        self.blight_text = ": 0%"
-        self.blight_text_sprite = None
-
         self.bar_sprite = None
 
     def get_size(self):
@@ -610,9 +654,6 @@ class BlightBarElement(UiElement):
     def all_sprites(self):
         if self.bg_sprite is not None:
             yield self.bg_sprite
-        if self.blight_text_sprite is not None:
-            for spr in self.blight_text_sprite.all_sprites():
-                yield spr
         if self.bar_sprite is not None:
             yield self.bar_sprite
 
@@ -629,14 +670,7 @@ class BlightBarElement(UiElement):
 
         blight_pcnt = game_state.get_blight_pcnt()
 
-        self.blight_text = "{}%".format(int(blight_pcnt * 100))
-        if self.blight_text_sprite is None:
-            self.blight_text_sprite = sprites.TextSprite(spriteref.LAYER_UI_FG, 0, 0, self.blight_text)
-        self.blight_text_sprite = self.blight_text_sprite.update(new_text=self.blight_text, new_scale=1)
-        text_xy = (abs_xy[0] + 16 * 2, 1 + abs_xy[1] + self.get_size()[1] // 2 - self.blight_text_sprite.get_size()[1] // 2)
-        self.blight_text_sprite = self.blight_text_sprite.update(new_x=text_xy[0], new_y=text_xy[1], new_color=colors.BLACK)
-
-        bar_start_x = 40  # in sheet dims
+        bar_start_x = 8  # in sheet dims
         bar_end_x = 272
 
         if self.bar_sprite is None:
@@ -672,8 +706,8 @@ class CellInWorldButton(UiElement):
         if tileinfo is None:
             return None
         else:
-            if tileinfo.tower_spec is not None:
-                return tileinfo.tower_spec.get_hover_text(game_state=game_state, xy=self.xy_in_world)
+            if tileinfo.get_tower_spec() is not None:
+                return tileinfo.get_tower_spec().get_hover_text(game_state=game_state, xy=self.xy_in_world)
             elif tileinfo.ground_type == GroundType.DIRT:
                 res = sprites.TextBuilder().addLine("Dirt", color=colors.DIRT_LIGHT_COLOR)
                 res.addLine("Perfect for any plant or fungus.")
