@@ -53,6 +53,8 @@ class GameState:
         self.world_tiles = {}  # (x, y) -> TileInfo
         self._populate_initial_world_tiles()
 
+        self._always_show_grid = False
+
     def get_resources(self, res_type):
         return self.resources[res_type]
 
@@ -99,7 +101,7 @@ class GameState:
         return False
 
     def should_show_empty_tiles(self):
-        return self.trying_to_buy is not None and self.trying_to_buy.is_utility()
+        return (self.trying_to_buy is not None and self.trying_to_buy.is_utility()) or self._always_show_grid
 
     def get_blight_pcnt(self):
         return util.Utils.bound(self.get_resources(ResourceType.BLIGHT) / self.max_blight, 0, 1)
@@ -154,6 +156,10 @@ class GameState:
 
     def handle_user_inputs(self):
         input_state = inputs.get_instance()
+
+        if input_state.was_pressed(pygame.K_g):
+            self._always_show_grid = not self._always_show_grid
+            print("INFO: set always show grid to: {}".format(self._always_show_grid))
 
         if not input_state.mouse_in_window():
             self.set_hover_element(None)
