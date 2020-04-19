@@ -45,7 +45,7 @@ class ResourceTypes:
     MUSHROOM = ResourceType("MUSHROOM", colors.MUSHROOM_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.mushroom_symbol)
     FLOWER = ResourceType("FLOWER", colors.FLOWER_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.flower_symbol)
     BLIGHT = ResourceType("BLIGHT", colors.BLIGHT_COLOR, symbol_getter=lambda: spriteref.MAIN_SHEET.blight_symbol)
-    MONEY = ResourceType("MONEY", colors.WHITE, symbol_getter=None)
+    MONEY = ResourceType("MONEY", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.money_symbol)
     VP = ResourceType("VP", colors.WHITE, symbol_getter=lambda: spriteref.MAIN_SHEET.vp_symbol)
 
 
@@ -75,7 +75,7 @@ class GameState:
             ResourceTypes.MUSHROOM: 0,
             ResourceTypes.FLOWER: 0,
             ResourceTypes.BLIGHT: 0,
-            ResourceTypes.MONEY: 30,
+            ResourceTypes.MONEY: 300,
             ResourceTypes.VP: 0
         }
 
@@ -624,6 +624,14 @@ class MainPanelElement(UiElement):
         self.basic_tower_buttons = []
         self.utility_tower_buttons = []
 
+        self.day_label = None
+        self.money_label = None
+        self.vp_label = None
+        self.fruit_label = None
+        self.veg_label = None
+        self.mushroom_label = None
+        self.flower_label = None
+
         self.next_day_button = None
 
     def can_be_clicked(self):
@@ -643,6 +651,29 @@ class MainPanelElement(UiElement):
             if butt is not None:
                 for spr in butt.all_sprites():
                     yield spr
+
+        if self.day_label is not None:
+            for spr in self.day_label.all_sprites():
+                yield spr
+        if self.money_label is not None:
+            for spr in self.money_label.all_sprites():
+                yield spr
+        if self.vp_label is not None:
+            for spr in self.vp_label.all_sprites():
+                yield spr
+        if self.fruit_label is not None:
+            for spr in self.fruit_label.all_sprites():
+                yield spr
+        if self.veg_label is not None:
+            for spr in self.veg_label.all_sprites():
+                yield spr
+        if self.mushroom_label is not None:
+            for spr in self.mushroom_label.all_sprites():
+                yield spr
+        if self.flower_label is not None:
+            for spr in self.flower_label.all_sprites():
+                yield spr
+
         if self.next_day_button is not None:
             for spr in self.next_day_button.all_sprites():
                 yield spr
@@ -655,6 +686,21 @@ class MainPanelElement(UiElement):
         for butt in self.utility_tower_buttons:
             if butt is not None:
                 yield butt
+
+        if self.day_label is not None:
+            yield self.day_label
+        if self.money_label is not None:
+            yield self.money_label
+        if self.vp_label is not None:
+            yield self.vp_label
+        if self.fruit_label is not None:
+            yield self.fruit_label
+        if self.veg_label is not None:
+            yield self.veg_label
+        if self.mushroom_label is not None:
+            yield self.mushroom_label
+        if self.flower_label is not None:
+            yield self.flower_label
 
         if self.next_day_button is not None:
             yield self.next_day_button
@@ -702,6 +748,8 @@ class MainPanelElement(UiElement):
             y = xy_start[1] + (i * button_spacing[1])
             self.utility_tower_buttons[i].set_xy((xy_start[0] * 2, y * 2))
 
+        self._update_resource_labels(game_state)
+
         next_day_xy = (22, 251)  # sheet dims
         if self.next_day_button is None:
             self.next_day_button = NextDayButton(next_day_xy[0] * 2, next_day_xy[1] * 2, parent=self)
@@ -709,6 +757,62 @@ class MainPanelElement(UiElement):
 
         for child in self.all_children():
             child.update(game_state)
+
+    def _update_resource_labels(self, game_state):
+        y_spacing = 15 * 2
+        x = 20 * 2
+        y = 100 * 2
+
+        #if self.money_label is None:
+        #    self.money_label = ResourceLabelElement((x, y), ResourceTypes.MONEY, symbol_scale=2, parent=self)
+        #self.money_label.set_text(" {}".format(game_state.get_resources(ResourceTypes.MONEY)))
+
+        if self.money_label is None:
+            self.money_label = ResourceLabelElement((x, y), None, symbol_scale=2, parent=self)
+        self.money_label.set_text("${}".format(game_state.get_resources(ResourceTypes.MONEY)))
+
+        y += y_spacing * 2
+
+        storage = game_state.get_storage_capacity()
+
+        if self.fruit_label is None:
+            self.fruit_label = ResourceLabelElement((x, y), ResourceTypes.FRUIT, parent=self)
+        self.fruit_label.set_text(" {}/{}".format(game_state.get_resources(ResourceTypes.FRUIT), storage))
+
+        y += y_spacing
+
+        if self.veg_label is None:
+            self.veg_label = ResourceLabelElement((x, y), ResourceTypes.VEG, parent=self)
+        self.veg_label.set_text(" {}/{}".format(game_state.get_resources(ResourceTypes.VEG), storage))
+
+        y += y_spacing
+
+        if self.mushroom_label is None:
+            self.mushroom_label = ResourceLabelElement((x, y), ResourceTypes.MUSHROOM, parent=self)
+        self.mushroom_label.set_text(" {}/{}".format(game_state.get_resources(ResourceTypes.MUSHROOM), storage))
+
+        y += y_spacing
+
+        if self.flower_label is None:
+            self.flower_label = ResourceLabelElement((x, y), ResourceTypes.FLOWER, parent=self)
+        self.flower_label.set_text(" {}/{}".format(game_state.get_resources(ResourceTypes.FLOWER), storage))
+
+        y += y_spacing * 2
+
+        #if self.vp_label is None:
+        #    self.vp_label = ResourceLabelElement((x, y), ResourceTypes.VP, symbol_scale=2, parent=self)
+        #self.vp_label.set_text(" {}".format(game_state.get_resources(ResourceTypes.VP)))
+        #self.vp_label.x_spacing = 8
+
+        if self.vp_label is None:
+            self.vp_label = ResourceLabelElement((x, y), None, symbol_scale=2, parent=self)
+        self.vp_label.set_text("VP: {}".format(game_state.get_resources(ResourceTypes.VP)))
+
+        y += y_spacing
+
+        if self.day_label is None:
+            self.day_label = ResourceLabelElement((x, y), None, scale=2, parent=self)
+        self.day_label.set_text("Day {}".format(game_state.day))
 
 
 class NextDayButton(UiElement):
@@ -936,6 +1040,85 @@ class HoverInfoBox(UiElement):
                 self.text_sprite = sprites.TextSprite(spriteref.LAYER_UI_FG, 0, 0, "abc", scale=1)
             self.text_sprite = self.text_sprite.update(new_x=inner_rect[0], new_y=inner_rect[1],
                                                        new_text=hover_text.text, new_color_lookup=hover_text.colors)
+
+
+class ResourceLabelElement(UiElement):
+
+    def __init__(self, xy, res_type, scale=2, symbol_scale=3, hover_text_builder=None, text_color=colors.WHITE, parent=None):
+        UiElement.__init__(self, xy, parent=parent)
+        self.res_type = res_type
+        self.text = ": 0"
+        self.text_color = text_color
+        self.scale = scale
+        self.symbol_scale = symbol_scale
+        self.x_spacing = 2
+
+        self.hover_text_builder = hover_text_builder
+
+        self.symbol_sprite = None
+        self.text_sprite = None
+
+    def all_sprites(self):
+        if self.symbol_sprite is not None:
+            yield self.symbol_sprite
+        if self.text_sprite is not None:
+            for spr in self.text_sprite.all_sprites():
+                yield spr
+
+    def can_be_clicked(self):
+        return False
+
+    def can_be_hovered(self):
+        return True
+
+    def get_hover_text(self, game_state):
+        return self.hover_text_builder
+
+    def get_size(self):
+        width = 0
+        height = 0
+        if self.symbol_sprite is not None:
+            width += self.symbol_sprite.width()
+            width += self.x_spacing * self.scale
+            height = self.symbol_sprite.height()
+        if self.text_sprite is not None:
+            width += self.text_sprite.get_size()[0]
+            height = max(height, self.text_sprite.get_size()[1])
+        return width, height
+
+    def set_text(self, text):
+        self.text = text
+
+    def set_hover_text(self, hover_text_builder):
+        self.hover_text_builder = hover_text_builder
+
+    def update(self, game_state):
+        abs_xy = self.get_xy(local=False)
+        symbol_model = None if self.res_type is None else self.res_type.get_symbol()
+        text = self.text
+
+        if symbol_model is None:
+            if self.symbol_sprite is not None:
+                renderengine.get_instance().remove(self.symbol_sprite)
+                self.symbol_sprite = None
+        else:
+            if self.symbol_sprite is None:
+                self.symbol_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_FG)
+            self.symbol_sprite = self.symbol_sprite.update(new_model=symbol_model, new_scale=self.symbol_scale)
+
+        if self.text_sprite is None:
+            self.text_sprite = sprites.TextSprite(spriteref.LAYER_UI_FG, 0, 0, "abc")
+
+        self.text_sprite = self.text_sprite.update(new_text=text, new_scale=self.scale, new_color=self.text_color)
+
+        x = abs_xy[0]
+        text_y = abs_xy[1]
+        if self.symbol_sprite is not None:
+            symbol_y = text_y + self.text_sprite.get_size()[1] // 2 - self.symbol_sprite.height() // 2
+            self.symbol_sprite = self.symbol_sprite.update(new_x=x, new_y=symbol_y)
+            x += self.x_spacing * self.scale + self.symbol_sprite.width()
+
+        self.text_sprite = self.text_sprite.update(new_x=x, new_y=text_y)
 
 
 class BlightBarElement(UiElement):

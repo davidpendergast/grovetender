@@ -47,6 +47,7 @@ class MainSheet(spritesheets.SpriteSheet):
         self.blight_icon = None
 
         self.vp_symbol = None
+        self.money_symbol = None
 
         self.fruit_symbol = None
         self.veg_symbol = None
@@ -95,6 +96,7 @@ class MainSheet(spritesheets.SpriteSheet):
         self.blight_icon = sprites.ImageModel(240, 80, 16, 16, offset=start_pos)
 
         self.vp_symbol = sprites.ImageModel(272, 80, 17, 9, offset=start_pos)
+        self.money_symbol = sprites.ImageModel(272, 96, 12, 13, offset=start_pos)
 
         self.fruit_symbol = sprites.ImageModel(304, 80, 8, 8, offset=start_pos)
         self.veg_symbol = sprites.ImageModel(312, 80, 8, 8, offset=start_pos)
