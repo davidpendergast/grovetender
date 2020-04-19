@@ -1,5 +1,6 @@
 import pygame
 import math
+import random
 
 import src.engine.renderengine as renderengine
 import src.engine.sprites as sprites
@@ -66,6 +67,7 @@ class GameState:
         self.current_hover_obj = None  # the thing you're hovering over
 
         self.max_blight = 100  # you lose when you hit this
+        self.base_storage = 3
 
         self.resources = {
             ResourceTypes.FRUIT: 0,
@@ -97,18 +99,145 @@ class GameState:
                 if cond is None or cond(self.world_tiles[xy].get_tower_spec()):
                     yield xy
 
-    def add_floating_text_in_world(self, text, color, pos):
-        self.floating_texts.append([text, color, pos, 0])
+    def all_tower_specs(self, cond=None):
+        for xy in self.all_tower_cells(cond=cond):
+            yield self.world_tiles[xy].get_tower_spec()
+
+    def get_tower_spec_at_position_if_present(self, xy):
+        if xy in self.world_tiles:
+            tileinfo = self.world_tiles[xy]
+            return tileinfo.get_tower_spec()
+        else:
+            return None
+
+    def add_floating_text_in_world(self, text, color, pos, delay=0):
+        self.floating_texts.append([text, color, pos, -delay])
+
+    def get_storage_capacity(self):
+        res = self.base_storage
+        for spec in self.all_tower_specs():
+            res += spec.stat_value(towers.TowerStatTypes.STORAGE)
+        return max(0, res)
 
     def do_next_day_seq(self):
         self.day += 1
+        print("INFO: day {}".format(self.day))
 
+        # remove overflow resources
+        storage_cap = self.get_storage_capacity()
+        for resource in [ResourceTypes.FRUIT, ResourceTypes.VEG, ResourceTypes.MUSHROOM, ResourceTypes.FLOWER]:
+            self.resources[resource] = min(self.resources[resource], storage_cap)
+
+        activating_xys_now = []
+        to_remove_at_the_end = set()
+
+        # add activation ticks
         for xy in self.all_tower_cells():
-            pass
+            tileinfo = self.world_tiles[xy]
+            tower_spec = tileinfo.get_tower_spec()
 
-        for shovel_xy in self.all_tower_cells(lambda spec: spec.get_type() == towers.TowerTypes.SHOVEL):
-            tileinfo = self.get_tile_info(shovel_xy)
+            if tower_spec.stat_value_in_world(towers.TowerStatTypes.NON_ACTIVATING, self, xy) > 0:
+                tileinfo.activation_energy = 1
+                continue
+
+            cycle_length = tower_spec.stat_value_in_world(towers.TowerStatTypes.CYCLE_LENGTH, self, xy)
+            energy = tileinfo.activation_energy
+
+            if energy >= cycle_length:
+                activating_xys_now.append(xy)
+                tileinfo.activation_energy = 1
+                if tower_spec.stat_value_in_world(towers.TowerStatTypes.SELF_DESTRUCT, self, xy) > 0:
+                    to_remove_at_the_end.add(xy)
+            else:
+                tileinfo.activation_energy += 1
+
+        # fruit production
+        random.shuffle(activating_xys_now)
+        for xy in activating_xys_now:
+            tower_spec = self.world_tiles[xy].get_tower_spec()
+
+            fruit_prod = tower_spec.stat_value_in_world(towers.TowerStatTypes.FRUIT_PRODUCTION, self, xy)
+            if fruit_prod > 0:
+                self.inc_resources(ResourceTypes.FRUIT, fruit_prod, with_effect_at_pos=xy)
+            veg_prod = tower_spec.stat_value_in_world(towers.TowerStatTypes.VEG_PRODUCTION, self, xy)
+            if veg_prod > 0:
+                self.inc_resources(ResourceTypes.VEG, veg_prod, with_effect_at_pos=xy)
+            mushroom_prod = tower_spec.stat_value_in_world(towers.TowerStatTypes.MUSHROOM_PRODUCTION, self, xy)
+            if mushroom_prod > 0:
+                self.inc_resources(ResourceTypes.MUSHROOM, mushroom_prod, with_effect_at_pos=xy)
+            flower_prod = tower_spec.stat_value_in_world(towers.TowerStatTypes.FLOWER_PRODUCTION, self, xy)
+            if flower_prod > 0:
+                self.inc_resources(ResourceTypes.FLOWER, flower_prod, with_effect_at_pos=xy)
+
+        blight_xy_to_remove = set()
+
+        # utility effects
+        for xy in activating_xys_now:
+            tower_spec = self.world_tiles[xy].get_tower_spec()
+            dig = tower_spec.stat_value_in_world(towers.TowerStatTypes.DIG, self, xy)
+            if dig > 0:
+                self.world_tiles[xy].ground_type = GroundType.DIRT
+
+            purify = tower_spec.stat_value_in_world(towers.TowerStatTypes.PURIFYING, self, xy)
+            if purify > 0:
+                adjacents = [n for n in util.Utils.neighbors(xy[0], xy[1], and_diags=True)]
+                random.shuffle(adjacents)
+                for n_xy in adjacents:
+                    n_spec = self.get_tower_spec_at_position_if_present(n_xy)
+                    if n_spec is not None and n_spec.tower_type == towers.TowerTypes.BLIGHT:
+                        if purify > 0 and n_xy not in blight_xy_to_remove:
+                            blight_xy_to_remove.add(n_xy)
+                            purify -= 1
+                            self.add_floating_text_in_world("X", colors.WHITE, xy, delay=10)
+
+        # blight production
+        for xy in activating_xys_now:
+            if xy in blight_xy_to_remove:
+                continue  # it's getting deleted so do no production
+
+            tower_spec = self.world_tiles[xy].get_tower_spec()
+
+            blight_prod = tower_spec.stat_value_in_world(towers.TowerStatTypes.BLIGHT_PRODUCTION, self, xy)
+            if blight_prod > 0:
+                self.inc_resources(ResourceTypes.BLIGHT, blight_prod, with_effect_at_pos=xy)
+
+        # do deletions
+        to_remove_at_the_end.update(blight_xy_to_remove)
+        for xy in to_remove_at_the_end:
+            tileinfo = self.world_tiles[xy]
+
+            old_tower = tileinfo.get_tower_spec()
+            if old_tower.is_utility():
+                self.add_floating_text_in_world("!", old_tower.tower_type.get_color(), xy, delay=10)
+
             tileinfo.set_tower_spec(None)
+            if xy in activating_xys_now:
+                activating_xys_now.remove(xy)
+
+        # do spreads
+        for xy in activating_xys_now:
+            tower_spec = self.world_tiles[xy].get_tower_spec()
+            spread_chance = tower_spec.stat_value_in_world(towers.TowerStatTypes.SPREADING, self, xy) / 100
+            if random.random() < spread_chance:
+                new_tower = towers.get_spec_to_spread(tower_spec)
+                if new_tower is not None:
+                    adjacents = [n for n in util.Utils.neighbors(xy[0], xy[1], and_diags=False)]
+                    random.shuffle(adjacents)
+                    for adj in adjacents:
+                        if self.can_place_at(tower_spec, adj):
+                            self.world_tiles[adj].set_tower_spec(new_tower)
+                            self.add_floating_text_in_world("!", new_tower.tower_type.get_color(), adj, delay=20)
+                            break
+
+        # do upgrades
+        for xy in activating_xys_now:
+            tower_spec = self.world_tiles[xy].get_tower_spec()
+            upgrade_chance = tower_spec.stat_value_in_world(towers.TowerStatTypes.UPGRADING, self, xy) / 100
+            if random.random() < upgrade_chance:
+                new_tower_spec = towers.get_spec_to_upgrade_to(tower_spec)
+                if new_tower_spec is not None:
+                    self.world_tiles[xy].set_tower_spec(new_tower_spec)
+                    self.add_floating_text_in_world("^", new_tower_spec.tower_type.get_color(), xy, delay=20)
 
     def inc_resources(self, res_type, val, with_effect_at_pos=None):
         old_val = self.resources[res_type]
@@ -119,7 +248,7 @@ class GameState:
 
         change = self.resources[res_type] - old_val
         if with_effect_at_pos is not None and change != 0:
-            text = "+" if change > 0 else "-"
+            text = "" if change > 0 else "-"
             if res_type == ResourceTypes.MONEY:
                 text += "$"
             text += str(change)
@@ -150,8 +279,8 @@ class GameState:
     def set_trying_to_buy(self, tower_spec):
         self.trying_to_buy = tower_spec
 
-    def can_build_at(self, pos):
-        if self.trying_to_buy is None or pos not in self.world_tiles:
+    def can_place_at(self, tower_spec, pos):
+        if tower_spec is None or pos not in self.world_tiles:
             return False
         else:
             tileinfo = self.world_tiles[pos]
@@ -161,15 +290,21 @@ class GameState:
                 return False  # already a tower there
             elif tileinfo.ground_type == GroundType.INACCESSIBLE:
                 return False
-            elif self.trying_to_buy.cost < 0 or self.trying_to_buy.cost > self.get_resources(ResourceTypes.MONEY):
+            elif tileinfo.ground_type == GroundType.ROCK and not tower_spec.is_utility():
                 return False
-            elif tileinfo.ground_type == GroundType.ROCK and not self.trying_to_buy.is_utility():
-                return False
-            elif tileinfo.ground_type == GroundType.DIRT and self.trying_to_buy.tower_type == towers.TowerTypes.SHOVEL:
+            elif tileinfo.ground_type == GroundType.DIRT and tower_spec.tower_type == towers.TowerTypes.SHOVEL:
                 return False  # there's no reason to put a shovel on the dirt
+            else:
+                return True
 
-        # we can do it!
-        return True
+    def can_build_at(self, pos):
+        if not self.can_place_at(self.trying_to_buy, pos):
+            return False
+        else:
+            if self.trying_to_buy.cost < 0 or self.trying_to_buy.cost > self.get_resources(ResourceTypes.MONEY):
+                return False
+            else:
+                return True
 
     def try_to_build_at(self, pos):
         if self.can_build_at(pos):
@@ -274,6 +409,9 @@ class GameState:
             self._always_show_grid = not self._always_show_grid
             print("INFO: set always show grid to: {}".format(self._always_show_grid))
 
+        if input_state.was_pressed(pygame.K_RETURN):
+            self.do_next_day_seq()
+
         if not input_state.mouse_in_window():
             self.set_hover_element(None)
         else:
@@ -331,7 +469,7 @@ class TileInfo:
 
     def __init__(self, ground_type):
         self._tower_spec = None
-        self.activation_count = 0
+        self.activation_energy = 1
         self.ground_type = ground_type
 
     def get_tower_spec(self):
@@ -339,7 +477,7 @@ class TileInfo:
 
     def set_tower_spec(self, spec):
         if spec != self._tower_spec:
-            self.activation_count = 0
+            self.activation_energy = 1
         self._tower_spec = spec
 
     def get_ground_type(self):
@@ -926,6 +1064,7 @@ class WorldSceneElement(UiElement):
         self.cells = {}  # (x, y) -> CellInWorldButton
 
         self.floating_text_sprites = []
+        self.floating_text_bg_sprites = []
 
     def all_sprites(self):
         if self.big_rock_sprite is not None:
@@ -937,6 +1076,10 @@ class WorldSceneElement(UiElement):
                 yield spr
 
         for text_sprite in self.floating_text_sprites:
+            for spr in text_sprite.all_sprites():
+                yield spr
+
+        for text_sprite in self.floating_text_bg_sprites:
             for spr in text_sprite.all_sprites():
                 yield spr
 
@@ -982,26 +1125,38 @@ class WorldSceneElement(UiElement):
             button.set_xy_in_world(xy)
             button.update(game_state)
 
-        while len(self.floating_text_sprites) > len(game_state.floating_texts):
-            to_del = self.floating_text_sprites.pop()
-            renderengine.get_instance().remove(to_del)
+        active_texts = [textinfo for textinfo in game_state.floating_texts if textinfo[3] >= 0]
 
-        while len(self.floating_text_sprites) < len(game_state.floating_texts):
+        while len(self.floating_text_sprites) > len(active_texts):
+            renderengine.get_instance().remove(self.floating_text_sprites.pop())
+            renderengine.get_instance().remove(self.floating_text_bg_sprites.pop())
+
+        while len(self.floating_text_sprites) < len(active_texts):
             self.floating_text_sprites.append(sprites.TextSprite(spriteref.LAYER_SCENE_FG, 0, 0, "abc", scale=1))
+            self.floating_text_bg_sprites.append(sprites.TextSprite(spriteref.LAYER_SCENE_FG, 0, 0, "abc", scale=1))
 
-        for i in range(0, len(game_state.floating_texts)):
-            text, color, pos_in_world, elapsed_time = game_state.floating_texts[i]
+        for i in range(0, len(active_texts)):
+            text, color, pos_in_world, elapsed_time = active_texts[i]
             text_sprite = self.floating_text_sprites[i]
+            text_bg_sprite = self.floating_text_bg_sprites[i]
 
             abs_xy = self.get_xy(local=False)
             center_of_text = (abs_xy[0] + 16 * 2 * (pos_in_world[0] + 1.5),
                               abs_xy[1] + 16 * 2 * (pos_in_world[1] + 1.5))
             height = int(game_state.floating_text_height * elapsed_time / game_state.floating_text_duration) * 2
-            self.floating_text_sprites[i] = text_sprite.update(new_text=text, new_color=color, new_scale=1)
+
+            scale = 2
+
+            self.floating_text_sprites[i] = text_sprite.update(new_text=text, new_color=color, new_scale=scale)
             text_xy = (center_of_text[0] - self.floating_text_sprites[i].get_size()[0] // 2,
                        center_of_text[1] - height - self.floating_text_sprites[i].get_size()[1])
+            depth = -10 + center_of_text[1] / 100
             self.floating_text_sprites[i] = self.floating_text_sprites[i].update(new_x=text_xy[0], new_y=text_xy[1],
-                                                                                 new_depth=-10 + center_of_text[1] / 100)
+                                                                                 new_depth=depth)
+
+            self.floating_text_bg_sprites[i] = text_bg_sprite.update(new_text=text, new_x=text_xy[0], new_y=text_xy[1] + 2,
+                                                                     new_depth=depth + 0.025,
+                                                                     new_color=colors.BLACK, new_scale=scale)
 
 
 

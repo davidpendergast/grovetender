@@ -12,3 +12,11 @@ BLIGHT_COLOR = (228 / 255, 127 / 255, 253 / 255)
 
 DIRT_COLOR = (131 / 255, 108 / 255, 67 / 255)
 DIRT_LIGHT_COLOR = (174 / 255, 153 / 255, 115 / 255)
+
+
+def darker(color, pcnt=0.3):
+    res = []
+    for i in range(0, 3):
+        c = color[i]
+        res.append(max(0, min(1, c * (1 - pcnt))))
+    return tuple(res)

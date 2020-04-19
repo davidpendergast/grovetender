@@ -57,7 +57,7 @@ def init(name_of_game):
     SORTS = True
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_SCENE_BG, 0, False, COLOR))
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_SCENE_ENVIRONMENT, 5, False, COLOR))
-    render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_SCENE_FG, 10, False, COLOR))
+    render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_SCENE_FG, 10, SORTS, COLOR))
 
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_UI_BG, 12, SORTS, COLOR))
     render_eng.add_layer(layers.ImageLayer(spriteref.LAYER_UI_FG, 15, SORTS, COLOR))

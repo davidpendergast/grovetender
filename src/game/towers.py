@@ -35,7 +35,7 @@ class TowerTypes:
     FLOWER = TowerType("FLOWER", colors.FLOWER_COLOR)
     BLIGHT = TowerType("BLIGHT", colors.BLIGHT_COLOR)
 
-    SHOVEL = TowerType("SHOVEL", colors.WHITE, is_utility=True)
+    SHOVEL = TowerType("SHOVEL", colors.DIRT_LIGHT_COLOR, is_utility=True)
     BIN = TowerType("BIN", colors.WHITE, is_utility=True)
     ROCK = TowerType("ROCK", colors.WHITE, is_utility=True)
     PURIFIER = TowerType("PURIFIER", colors.WHITE, is_utility=True)
@@ -143,6 +143,13 @@ class TowerSpec:
         else:
             return self.stats[stat_type]
 
+    def stat_value_in_world(self, stat_type, game_state, xy):
+        base_val = self.stat_value(stat_type)
+        if base_val > 0:
+            return base_val + game_state.additional_stat_value_at(stat_type, xy)
+        else:
+            return base_val
+
     def get_hover_text(self, game_state=None, xy=None):
         res = sprites.TextBuilder()
         res.add(self.name, self.get_color())
@@ -161,10 +168,12 @@ class TowerSpec:
         for stat_type in self.stats:
             if stat_type.is_hidden():
                 continue
-            stat_val = self.stat_value(stat_type)
-            if stat_val > 0:
-                if game_state is not None and xy is not None:
-                    stat_val += game_state.additional_stat_value_at(stat_type, xy)
+
+            if game_state is not None and xy is not None:
+                stat_val = self.stat_value_in_world(stat_type, game_state, xy)
+            else:
+                stat_val = self.stat_value(stat_type)
+
             if stat_val <= 0:
                 continue
             res.addLine(stat_type.get_desc(stat_val), color=stat_type.get_color())
@@ -346,4 +355,40 @@ def all_basic_towers():
 
 def all_utility_towers():
     return [SHOVEL, GROWING_ROCK, PURIFICATION_TABLET, BIN]
+
+
+def all_towers():
+    blight_towers = [BLIGHT_1, BLIGHT_2, BLIGHT_3]
+    return all_basic_towers() + all_utility_towers() + blight_towers
+
+
+def get_spec_to_spread(tower_spec):
+    if tower_spec is None:
+        return None
+    tower_type = tower_spec.tower_type
+    if tower_type == TowerTypes.FRUIT:
+        return FRUIT_1
+    elif tower_type == TowerTypes.VEG:
+        return VEG_1
+    elif tower_type == TowerTypes.MUSHROOM:
+        return MUSHROOM_1
+    elif tower_type == TowerTypes.FLOWER:
+        return FLOWER_1
+    elif tower_type == TowerTypes.BLIGHT:
+        return BLIGHT_1
+    else:
+        return None
+
+
+def get_spec_to_upgrade_to(tower_spec):
+    if tower_spec is None:
+        return None
+    tower_type = tower_spec.tower_type
+    tower_level = tower_spec.level
+
+    for ts in all_towers():
+        if ts.tower_type == tower_type and ts.level == tower_level + 1:
+            return ts
+
+    return None
 
