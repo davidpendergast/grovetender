@@ -529,6 +529,7 @@ class Renderer:
         self.ui_main_panel = MainPanelElement()
         self.ui_blight_bar = BlightBarElement()
         self.ui_hover_info_box = HoverInfoBox()
+        self.ui_contract_panel_row = ContractPanelRow()
 
         self.world_scene = WorldSceneElement()
 
@@ -540,6 +541,8 @@ class Renderer:
         for spr in self.ui_blight_bar.all_sprites():
             yield spr
         for spr in self.ui_hover_info_box.all_sprites():
+            yield spr
+        for spr in self.ui_contract_panel_row.all_sprites():
             yield spr
         for spr in self.world_scene.all_sprites():
             yield spr
@@ -556,6 +559,7 @@ class Renderer:
         self.ui_main_panel.update(game_state)
         self.ui_blight_bar.update(game_state)
         self.ui_hover_info_box.update(game_state)
+        self.ui_contract_panel_row.update(game_state)
         self.cursor_icon.update(game_state)
 
         self.world_scene.update(game_state)
@@ -866,9 +870,9 @@ class NextDayButton(UiElement):
 
         gray = colors.darker(colors.WHITE, pcnt=0.3)
         #            ##############################################################
-        res.addLine("Buy towers at the top right. Use them to gather resources and", color=gray)
-        res.addLine("complete the goal cards along the top. When you miss a goal,", color=gray)
-        res.addLine("blight will spread and kill your crops.", color=gray)
+        res.addLine("Buy towers at the top right. Use them to produce resources and", color=gray)
+        res.addLine("complete the goal cards along the top. When you miss or cancel", color=gray)
+        res.addLine("a goal, blight will spread and kill your garden.", color=gray)
         res.addLine("How long can you... Keep it Alive?", color=colors.WHITE)
         return res
 
@@ -1148,6 +1152,146 @@ class ResourceLabelElement(UiElement):
             x += self.x_spacing * self.scale + self.symbol_sprite.width()
 
         self.text_sprite = self.text_sprite.update(new_x=x, new_y=text_y)
+
+
+class ContractPanelRow(UiElement):
+
+    def __init__(self):
+        UiElement.__init__(self, (0, 0), parent=None)
+        self.panels = []
+        self.panel_spacing = 8 * 2
+
+    def get_size(self):
+        w = 0
+        h = 0
+        for p in self.panels:
+            w += p.get_size()[0]
+            h = max(p.get_size()[1], h)
+        if w > 0 and len(self.panels) > 2:
+            w += self.panel_spacing * (len(self.panels) - 1)
+        return w, h
+
+    def all_children(self):
+        for p in self.panels:
+            yield p
+
+    def all_sprites(self):
+        for p in self.panels:
+            for spr in p.all_sprites():
+                yield spr
+
+    def can_be_hovered(self):
+        return True
+
+    def update(self, game_state):
+        while len(self.panels) < len(game_state.active_contracts):
+            self.panels.append(ContractPanelElement(game_state.active_contracts[0], parent=self))
+        while len(self.panels) > len(game_state.active_contracts):
+            for spr in self.panels.pop().all_sprites():
+                renderengine.get_instance().remove(spr)
+
+        self.set_xy((16 * 2, 8 * 2), local=False)
+        x = 0
+
+        for i in range(0, len(game_state.active_contracts)):
+            self.panels[i].set_contract_state(game_state.active_contracts[i])
+            self.panels[i].set_xy((x, 0), local=True)
+            self.panels[i].update(game_state)
+            x += self.panels[i].get_size()[0] + self.panel_spacing
+
+
+class ContractPanelElement(UiElement):
+
+    def __init__(self, contract, parent=None):
+        UiElement.__init__(self, (0, 0), parent=parent)
+        self.contract = contract
+
+        self.bg_sprite = None
+
+        self.bar_sprite = None
+
+        self.req_labels = []
+
+        self.punish_label = None
+        self.money_label = None
+        self.days_label = None
+
+        self.no_button = None
+        self.yes_button = None
+
+    def set_contract_state(self, contract):
+        self.contract = contract
+
+    def get_size(self):
+        if self.bg_sprite is None:
+            return super().get_size()
+        else:
+            return self.bg_sprite.size()
+
+    def all_sprites(self):
+        if self.bg_sprite is not None:
+            yield self.bg_sprite
+        if self.bar_sprite is not None:
+            yield self.bar_sprite
+
+        for label in self.req_labels:
+            for spr in label.all_sprites():
+                yield spr
+        if self.punish_label is not None:
+            for spr in self.punish_label.all_sprites():
+                yield spr
+        if self.money_label is not None:
+            for spr in self.money_label.all_sprites():
+                yield spr
+        if self.days_label is not None:
+            for spr in self.days_label.all_sprites():
+                yield spr
+
+        if self.no_button is not None:
+            for spr in self.no_button.all_sprites():
+                yield spr
+        if self.yes_button is not None:
+            for spr in self.yes_button.all_sprites():
+                yield spr
+
+    def all_children(self):
+        for label in self.req_labels:
+            yield label
+
+        if self.punish_label is not None:
+            yield self.punish_label
+        if self.money_label is not None:
+            yield self.money_label
+        if self.days_label is not None:
+            yield self.days_label
+
+        if self.no_button is not None:
+            yield self.no_button
+        if self.yes_button is not None:
+            yield self.yes_button
+
+    def can_be_hovered(self):
+        return True
+
+    def get_hover_text(self, game_state):
+        return None
+
+    def update(self, game_state):
+        if self.bg_sprite is None:
+            self.bg_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_BG, scale=2)
+        abs_xy = self.get_xy(local=False)
+        self.bg_sprite = self.bg_sprite.update(new_model=self.contract.bg_sprite, new_x=abs_xy[0], new_y=abs_xy[1])
+
+        if self.bar_sprite is None:
+            self.bar_sprite = sprites.ImageSprite.new_sprite(spriteref.LAYER_UI_FG, scale=1)
+
+        time_limit_prog = self.contract.get_time_limit_pcnt()
+        bar_max_w = 78 * 2
+        bar_w = int(time_limit_prog * bar_max_w)
+        bar_model = spriteref.MAIN_SHEET.contract_panel_bar
+        bar_ratio = (bar_w / bar_model.width(), 2)
+        self.bar_sprite = self.bar_sprite.update(new_model=bar_model, new_ratio=bar_ratio,
+                                                 new_x=abs_xy[0] + 1 * 2, new_y=abs_xy[1] + 65 * 2)
 
 
 class BlightBarElement(UiElement):

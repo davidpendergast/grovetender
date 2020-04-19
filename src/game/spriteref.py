@@ -61,6 +61,9 @@ class MainSheet(spritesheets.SpriteSheet):
         self.contract_panel_mushroom = None
         self.contract_panel_flower = None
 
+        self.contract_panel_bar = None
+        self.contract_panel_bar_endcap = None
+
         self.box_borders = []
 
     def draw_to_atlas(self, atlas, sheet, start_pos=(0, 0)):
@@ -109,6 +112,9 @@ class MainSheet(spritesheets.SpriteSheet):
         self.contract_panel_veg = self.contract_panels[1]
         self.contract_panel_mushroom = self.contract_panels[2]
         self.contract_panel_flower = self.contract_panels[3]
+
+        self.contract_panel_bar = sprites.ImageModel(128, 208, 16, 2, offset=start_pos)
+        self.contract_panel_bar_endcap = sprites.ImageModel(144, 208, 1, 2, offset=start_pos)  # not used
 
         self.box_borders = [sprites.ImageModel(120 + (i % 3) * 8, 248 + (i // 3) * 8, 8, 8, offset=start_pos) for i in range(0, 9)]
 

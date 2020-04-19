@@ -15,6 +15,9 @@ class ContractState:
 
         self.bg_sprite = bg_sprite
 
+    def get_time_limit_pcnt(self):
+        return min(1.0, self.days_active / self.time_limit)
+
 
 def gen_contract(day):
     from src.game.gamestate import ResourceTypes
