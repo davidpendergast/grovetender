@@ -1,9 +1,10 @@
+import pygame
+
 import src.engine.renderengine as renderengine
 import src.engine.sprites as sprites
 import src.utils.util as util
 import src.engine.inputs as inputs
 
-import src.game.worldstate as worldstate
 import src.game.spriteref as spriteref
 import src.game.globalstate as gs
 import src.game.colors as colors
@@ -23,7 +24,7 @@ class ResourceType:
 class GroundType:
     ROCK = "ROCK"
     DIRT = "DIRT"
-    INACCESSIBLE = "INACCESSABLE"
+    INACCESSIBLE = "INACCESSIBLE"
 
 
 class GameState:
@@ -45,7 +46,7 @@ class GameState:
             ResourceType.MUSHROOM: 0,
             ResourceType.FLOWER: 0,
             ResourceType.BLIGHT: 0,
-            ResourceType.MONEY: 30,
+            ResourceType.MONEY: 3000,
             ResourceType.VP: 0
         }
 
@@ -55,11 +56,44 @@ class GameState:
     def get_resources(self, res_type):
         return self.resources[res_type]
 
-    def is_trying_to_buy(self):
-        return self.trying_to_buy is not None
+    def inc_resources(self, res_type, val):
+        self.resources[res_type] += val
+        if self.resources[res_type] < 0:
+            print("WARN: resource {} is less than zero ({}), correcting".format(res_type, self.resources[res_type]))
+            self.resources[res_type] = 0
+        return self.resources[res_type]
+
+    def set_trying_to_buy(self, tower_spec):
+        self.trying_to_buy = tower_spec
+
+    def try_to_build_at(self, pos):
+        if self.trying_to_buy is None or pos not in self.world_tiles:
+            return False
+        else:
+            tileinfo = self.world_tiles[pos]
+            if tileinfo is None:
+                return False
+            elif tileinfo.tower_spec is not None:
+                return False  # already a tower there
+            elif tileinfo.ground_type == GroundType.INACCESSIBLE:
+                return False
+            elif self.trying_to_buy.cost < 0 or self.trying_to_buy.cost > self.get_resources(ResourceType.MONEY):
+                return False
+            elif tileinfo.ground_type == GroundType.ROCK and not self.trying_to_buy.is_utility():
+                return False
+
+            # we can do it!
+            self.inc_resources(ResourceType.MONEY, -self.trying_to_buy.cost)
+            tileinfo.tower_spec = self.trying_to_buy
+            print("INFO: placed tower {} at {}".format(self.trying_to_buy.name, pos))
+            return True
+
+    def try_to_sell_at(self, pos):
+        print("trying to sell at {}".format(pos))
+        return False
 
     def should_show_empty_tiles(self):
-        return True
+        return self.trying_to_buy is not None and self.trying_to_buy.is_utility()
 
     def get_blight_pcnt(self):
         return util.Utils.bound(self.get_resources(ResourceType.BLIGHT) / self.max_blight, 0, 1)
@@ -77,8 +111,16 @@ class GameState:
         inaccessible.extend([(4 + i, i) for i in range(0, 4)])
         inaccessible.extend([(14, 7), (15, 7), (16, 7)])
         inaccessible.extend([(10, 2), (11, 3), (12, 3), (13, 3)])
-        inaccessible.extend([(9, 0), (9, 1)]) 
-        dirt = set()
+        inaccessible.extend([(9, 0), (9, 1)])
+
+        dirt = []
+        for x in range(2, 5):
+            for y in range(2, 4):
+                dirt.append((x, y))
+        for x in range(10, 14):
+            for y in range(5, 7):
+                dirt.append((x, y))
+
         for x in range(0, 17):
             for y in range(0, 8):
                 xy = (x, y)
@@ -107,10 +149,14 @@ class GameState:
             hover_obj = self._get_hover_obj_at(mouse_pos)
             self.set_hover_element(hover_obj)
 
-            if input_state.mouse_was_pressed():
+            mb1_was_pressed = input_state.mouse_was_pressed(button=1)
+            mb3_was_pressed = input_state.mouse_was_pressed(button=3)
+            if mb1_was_pressed or mb3_was_pressed:
                 clicked_obj = self._get_clicked_obj_at(mouse_pos)
                 if clicked_obj is not None:
-                    clicked_obj.do_click(self)
+                    clicked_obj.do_click(1 if mb1_was_pressed else 3, self)
+                else:
+                    self.set_trying_to_buy(None)
 
     def _get_hover_obj_at(self, game_pos):
         uis_to_check = [self.renderer.ui_main_panel,
@@ -138,10 +184,12 @@ class GameState:
         pass
 
     def get_current_hover_text(self):
-        if self.current_hover_obj is None:
-            return None
-        else:
+        if self.trying_to_buy is not None:
+            return self.trying_to_buy.get_hover_text(self)
+        elif self.current_hover_obj is not None:
             return self.current_hover_obj.get_hover_text(self)
+        else:
+            return None
 
     def get_current_hover_obj(self):
         return self.current_hover_obj
@@ -272,7 +320,7 @@ class UiElement:
         else:
             return None
 
-    def do_click(self, game_state):
+    def do_click(self, button, game_state):
         print("clicked ui element: {}".format(type(self).__name__))
 
 
@@ -359,7 +407,7 @@ class MainPanelElement(UiElement):
             child.update(game_state)
 
 
-class TowerIconElement(UiElement):
+class TowerIconElement(UiElement):  # this can really be merged w/ TowerBuyButton
 
     def __init__(self, tower_spec, xy, layer_id, parent=None):
         UiElement.__init__(self, xy, parent=parent)
@@ -394,7 +442,7 @@ class TowerIconElement(UiElement):
         if self.tower_spec is None:
             return None
         else:
-            return sprites.TextBuilder().add(self.tower_spec.name, color=self.tower_spec.get_color())
+            return self.tower_spec.get_hover_text(game_state=game_state)
 
     def can_be_clicked(self):
         return True
@@ -427,7 +475,9 @@ class TowerBuyButton(TowerIconElement):
         TowerIconElement.__init__(self, tower_spec, xy, layer_id, parent=parent)
 
     def get_outline_color(self, game_state):
-        if game_state.get_current_hover_obj() == self:
+        if game_state.trying_to_buy is None and game_state.get_current_hover_obj() == self:
+            return colors.RED
+        elif game_state.trying_to_buy is not None and game_state.trying_to_buy == self.tower_spec:
             return colors.RED
         else:
             return super().get_outline_color(game_state)
@@ -444,6 +494,13 @@ class TowerBuyButton(TowerIconElement):
 
     def can_be_clicked(self):
         return True
+
+    def do_click(self, button, game_state):
+        if button == 1:
+            if game_state.trying_to_buy is not None and game_state.trying_to_buy == self.tower_spec:
+                game_state.set_trying_to_buy(None)  # toggle it back off
+            else:
+                game_state.set_trying_to_buy(self.tower_spec)
 
 
 class HoverInfoBox(UiElement):
@@ -586,11 +643,30 @@ class CellInWorldButton(UiElement):
     def can_be_hovered(self):
         return True
 
+    def get_hover_text(self, game_state):
+        tileinfo = game_state.get_tile_info(self.xy_in_world)
+        if tileinfo is None:
+            return None
+        else:
+            if tileinfo.tower_spec is not None:
+                return tileinfo.tower_spec.get_hover_text(game_state=game_state, xy=self.xy_in_world)
+            elif tileinfo.ground_type == GroundType.DIRT:
+                res = sprites.TextBuilder().addLine("Dirt", color=colors.DIRT_LIGHT_COLOR)
+                res.addLine("Perfect for any plant or fungus.")
+                return res
+            elif tileinfo.ground_type == GroundType.ROCK and game_state.should_show_empty_tiles():
+                res = sprites.TextBuilder().addLine("Rock")
+                res.addLine("Use the Shovel to turn this into Dirt.")
+                return res
+
     def can_be_clicked(self):
         return True
 
-    def do_click(self, game_state):
-        print("clicked world button at: {}".format(self.xy_in_world))
+    def do_click(self, button, game_state):
+        if button == 1:
+            game_state.try_to_build_at(self.xy_in_world)
+        else:
+            game_state.try_to_sell_at(self.xy_in_world)
 
     def set_xy_in_world(self, xy):
         self.xy_in_world = xy

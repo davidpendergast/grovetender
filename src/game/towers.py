@@ -1,15 +1,21 @@
+import src.engine.sprites as sprites
+
 import src.game.spriteref as spriteref
 import src.game.colors as colors
 
 
 class TowerType:
 
-    def __init__(self, identifier, color):
+    def __init__(self, identifier, color, is_utility=False):
         self.identifier = identifier
         self.color = color
+        self.is_util = is_utility
 
     def get_color(self):
         return self.color
+
+    def is_utility(self):
+        return self.is_util
 
     def __eq__(self, other):
         if isinstance(other, TowerType):
@@ -29,10 +35,10 @@ class TowerTypes:
     FLOWER = TowerType("FLOWER", colors.FLOWER_COLOR)
     BLIGHT = TowerType("BLIGHT", colors.BLIGHT_COLOR)
 
-    SHOVEL = TowerType("SHOVEL", colors.WHITE)
-    BIN = TowerType("BIN", colors.WHITE)
-    ROCK = TowerType("ROCK", colors.WHITE)
-    PURIFIER = TowerType("PURIFIER", colors.WHITE)
+    SHOVEL = TowerType("SHOVEL", colors.WHITE, is_utility=True)
+    BIN = TowerType("BIN", colors.WHITE, is_utility=True)
+    ROCK = TowerType("ROCK", colors.WHITE, is_utility=True)
+    PURIFIER = TowerType("PURIFIER", colors.WHITE, is_utility=True)
 
 
 class TowerStatType:
@@ -57,6 +63,18 @@ class TowerSpec:
 
     def get_color(self):
         return self.tower_type.get_color()
+
+    def get_hover_text(self, game_state=None, xy=None):
+        res = sprites.TextBuilder()
+        res.addLine(self.name, self.get_color())
+
+        # TODO, stats n stuff
+
+        return res
+
+    def is_utility(self):
+        return self.tower_type.is_utility()
+
 
 
 FRUIT_1 = None
@@ -103,8 +121,8 @@ def init_towers():
     MUSHROOM_3 = TowerSpec("Cluster Mushroom", TowerTypes.MUSHROOM, 3, spriteref.MAIN_SHEET.mushroom_icons[2], {}, 72)
 
     FLOWER_1 = TowerSpec("Ok Flowers", TowerTypes.FLOWER, 1, spriteref.MAIN_SHEET.flower_icons[0], {}, 12)
-    FLOWER_2 = TowerSpec("Nice Flowers", TowerTypes.FLOWER, 1, spriteref.MAIN_SHEET.flower_icons[0], {}, 24)
-    FLOWER_3 = TowerSpec("Awesome Flowers", TowerTypes.FLOWER, 1, spriteref.MAIN_SHEET.flower_icons[0], {}, 48)
+    FLOWER_2 = TowerSpec("Nice Flowers", TowerTypes.FLOWER, 1, spriteref.MAIN_SHEET.flower_icons[1], {}, 24)
+    FLOWER_3 = TowerSpec("Awesome Flowers", TowerTypes.FLOWER, 1, spriteref.MAIN_SHEET.flower_icons[2], {}, 48)
 
     SHOVEL = TowerSpec("Shovel", TowerTypes.SHOVEL, 1, spriteref.MAIN_SHEET.shovel_icon, {}, 25)
     BIN = TowerSpec("Storage Bin", TowerTypes.BIN, 1, spriteref.MAIN_SHEET.storage_bin_icon, {}, 15)
