@@ -31,7 +31,7 @@ class GlobalState:
         self.game_state = None
 
     def is_dev(self):
-        return True
+        return False
 
     def set_game_state(self, game_state):
         self.game_state = game_state

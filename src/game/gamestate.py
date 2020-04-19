@@ -80,7 +80,7 @@ class GameState:
             ResourceTypes.MUSHROOM: 0,
             ResourceTypes.FLOWER: 0,
             ResourceTypes.BLIGHT: 0,
-            ResourceTypes.MONEY: 300,
+            ResourceTypes.MONEY: 120,
             ResourceTypes.VP: 0
         }
 
@@ -944,14 +944,12 @@ class NextDayButton(UiElement):
     def get_hover_text(self, game_state):
         if not game_state.is_game_over():
             res = sprites.TextBuilder()
-            res.addLine("Advances to the next day.")
-
             gray = colors.darker(colors.WHITE, pcnt=0.3)
             #            ##############################################################
             res.addLine("Buy towers at the top right. Use them to produce resources and", color=gray)
             res.addLine("complete the goal cards along the top. When you miss or cancel", color=gray)
             res.addLine("a goal, blight will spread and kill your garden.", color=gray)
-            res.addLine("How long can you... Keep it Alive?", color=colors.WHITE)
+            res.addLine("\nHow long can you... Keep it Alive?", color=colors.WHITE)
             return res
         else:
             res = sprites.TextBuilder()

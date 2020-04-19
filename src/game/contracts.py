@@ -40,7 +40,7 @@ def gen_contract(day):
     }
 
     # required quantity grows exponentially, to ensure the player eventually loses
-    QUANT_GROWTH_MULT_PER_DAY = 0.1
+    QUANT_GROWTH_MULT_PER_DAY = 0.02
     QUANT_GROWTH_EXP_PER_DAY = 0.05
 
     DIFFICULTY_WEIGHTS = {
