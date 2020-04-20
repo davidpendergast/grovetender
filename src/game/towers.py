@@ -331,9 +331,9 @@ def init_towers():
                        }, 25)
     BIN = TowerSpec("Storage Bin", TowerTypes.BIN, 1, spriteref.MAIN_SHEET.storage_bin_icon,
                     {
-                        TowerStatTypes.STORAGE: 2,
+                        TowerStatTypes.STORAGE: 5,
                         TowerStatTypes.NON_ACTIVATING: 1
-                    }, 15)
+                    }, 25)
     GROWING_ROCK = TowerSpec("Growing Rock", TowerTypes.ROCK, 1, spriteref.MAIN_SHEET.growing_rock_icon,
                              {
                                  TowerStatTypes.GROWING: 1,

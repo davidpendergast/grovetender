@@ -8,3 +8,4 @@ logs/*
 *.DS_Store
 texture_atlas.png
 dist/*
+output.spec
