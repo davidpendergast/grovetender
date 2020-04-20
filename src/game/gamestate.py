@@ -386,10 +386,10 @@ class GameState:
             if tileinfo is None:
                 return False
             if tileinfo.get_tower_spec() is not None:
-                if tower_spec.is_blight():
-                    return False # only blight can slam over other towers
+                if not tower_spec.is_blight():
+                    return False  # only blight can slam over other towers
                 elif tileinfo.get_tower_spec().is_blight():
-                    return False # but blight can't be slammed over
+                    return False  # but blight can't be slammed over
 
             if tileinfo.ground_type == GroundType.INACCESSIBLE:
                 return False
